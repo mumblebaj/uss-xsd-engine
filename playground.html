@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>uss-xsd-engine playground</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #38bdf8;
+        --border: #374151;
+        --error: #f87171;
+        --warning: #fbbf24;
+        --ok: #34d399;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0 0 16px;
+        font-size: 24px;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+        align-items: center;
+      }
+
+      select,
+      button {
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--panel-2);
+        color: var(--text);
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 16px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      textarea,
+      pre {
+        width: 100%;
+        min-height: 520px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #020617;
+        color: var(--text);
+        font-family: Consolas, Monaco, monospace;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow: auto;
+      }
+
+      .summary {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .pill {
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--panel-2);
+        font-size: 13px;
+      }
+
+      .pill.ok {
+        border-color: var(--ok);
+      }
+      .pill.error {
+        border-color: var(--error);
+      }
+      .pill.warning {
+        border-color: var(--warning);
+      }
+
+      .issues {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .issues li {
+        margin-bottom: 10px;
+      }
+
+      .sev-error {
+        color: var(--error);
+      }
+      .sev-warning {
+        color: var(--warning);
+      }
+      .sev-info {
+        color: var(--accent);
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      @media (max-width: 1000px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        textarea,
+        pre {
+          min-height: 320px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>uss-xsd-engine playground — getSchemaDiagnostics()</h1>
+
+      <div class="toolbar">
+        <select id="testCaseSelect"></select>
+        <button id="loadCaseBtn">Load test case</button>
+        <button id="runDiagnosticsBtn">Run diagnostics</button>
+        <button id="runTreeBtn">Run tree extraction</button>
+        <button id="runSampleBtn">Generate sample XML</button>
+        <button id="runValidateXmlBtn">Validate XML</button>
+      </div>
+
+      <input
+        id="rootElementNameInput"
+        placeholder="Optional root element name"
+        style="
+          padding: 10px 12px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: var(--panel-2);
+          color: var(--text);
+          min-width: 240px;
+        "
+      />
+
+      <div class="grid">
+        <div class="panel">
+          <h2>XSD Input</h2>
+          <textarea id="xsdInput"></textarea>
+        </div>
+
+        <div class="panel">
+          <h2>XML Input</h2>
+          <textarea id="xmlInput"></textarea>
+        </div>
+
+        <div class="panel">
+          <h2>Diagnostics</h2>
+
+          <div class="summary" id="summary"></div>
+
+          <h3>Issues</h3>
+          <ul class="issues" id="issues"></ul>
+
+          <h3>Raw Result</h3>
+          <pre id="rawResult"></pre>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        getSchemaDiagnostics,
+        extractSchemaTree,
+        generateSampleXml,
+        validateXml,
+      } from "./src/index.js";
+
+      const TEST_CASES = [
+        {
+          id: "valid-minimal",
+          label: "1. Valid minimal schema",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "unknown-type",
+          label: "2. Unknown type reference",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="employee" type="MissingType"/>
+</xs:schema>`,
+        },
+        {
+          id: "unknown-ref",
+          label: "3. Unknown element ref",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="missingElement"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "missing-base-type",
+          label: "4. Missing base type",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="EmployeeType">
+    <xs:complexContent>
+      <xs:extension base="PersonTypo">
+        <xs:sequence>
+          <xs:element name="id" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="employee" type="EmployeeType"/>
+</xs:schema>`,
+        },
+        {
+          id: "duplicate-global-complex-type",
+          label: "5. Duplicate global complexType",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="CustomerType">
+    <xs:sequence>
+      <xs:element name="id" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CustomerType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="customer" type="CustomerType"/>
+</xs:schema>`,
+        },
+        {
+          id: "invalid-occurs-range",
+          label: "6. Invalid occurs range",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="item" type="xs:string" minOccurs="5" maxOccurs="2"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "default-fixed-conflict",
+          label: "7. default + fixed conflict",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="status" type="xs:string" default="A" fixed="B"/>
+</xs:schema>`,
+        },
+        {
+          id: "unsupported-key",
+          label: "8. Unsupported xs:key",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="employees">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="employee" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="id" type="xs:string" use="required"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+
+    <xs:key name="employeeKey">
+      <xs:selector xpath="employee"/>
+      <xs:field xpath="@id"/>
+    </xs:key>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "unknown-group-ref",
+          label: "9. Unknown group ref",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="WrapperType">
+    <xs:sequence>
+      <xs:group ref="MissingGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="wrapper" type="WrapperType"/>
+</xs:schema>`,
+        },
+        {
+          id: "unknown-attribute-group-ref",
+          label: "10. Unknown attributeGroup ref",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="DocType">
+    <xs:attributeGroup ref="MissingAttrs"/>
+  </xs:complexType>
+
+  <xs:element name="doc" type="DocType"/>
+</xs:schema>`,
+        },
+        {
+          id: "inline-complex-type-attribute",
+          label: "11. inline complex type + attribute",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="book">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="author" type="xs:string"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "named-compex-type-with-choice",
+          label: "12. Named compleType with choice",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="ContactType">
+    <xs:choice>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="phone" type="xs:string"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:element name="contact" type="ContactType"/>
+</xs:schema>`,
+        },
+        {
+          id: "extension-with-base-content",
+          label: "13. Extension with base content",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="PersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EmployeeType">
+    <xs:complexContent>
+      <xs:extension base="PersonType">
+        <xs:sequence>
+          <xs:element name="employeeId" type="xs:string"/>
+        </xs:sequence>
+        <xs:attribute name="department" type="xs:string"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="employee" type="EmployeeType"/>
+</xs:schema>`,
+        },
+        {
+          id: "group-attributeGroup",
+          label: "14. Group + attributeGroup",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:group name="NameGroup">
+    <xs:sequence>
+      <xs:element name="firstName" type="xs:string"/>
+      <xs:element name="lastName" type="xs:string"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:attributeGroup name="AuditAttrs">
+    <xs:attribute name="createdBy" type="xs:string"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="UserType">
+    <xs:sequence>
+      <xs:group ref="NameGroup"/>
+    </xs:sequence>
+    <xs:attributeGroup ref="AuditAttrs"/>
+  </xs:complexType>
+
+  <xs:element name="user" type="UserType"/>
+      </xs:schema>`,
+        },
+        {
+          id: "tree-sequence",
+          label: "15. Tree - simple sequence",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+        <xs:element name="body" type="xs:string"/>
+      </xs:sequence>
+      <xs:attribute name="priority" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "tree-named-type",
+          label: "16. Tree - named complexType",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="AddressType">
+    <xs:sequence>
+      <xs:element name="street" type="xs:string"/>
+      <xs:element name="city" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="address" type="AddressType"/>
+</xs:schema>`,
+        },
+        {
+          id: "tree-choice",
+          label: "17. Tree - choice",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="ContactType">
+    <xs:choice>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="phone" type="xs:string"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:element name="contact" type="ContactType"/>
+</xs:schema>`,
+        },
+        {
+          id: "tree-extension",
+          label: "18. Tree - extension",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="PersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string"/>
+  </xs:complexType>
+
+  <xs:complexType name="EmployeeType">
+    <xs:complexContent>
+      <xs:extension base="PersonType">
+        <xs:sequence>
+          <xs:element name="department" type="xs:string"/>
+        </xs:sequence>
+        <xs:attribute name="role" type="xs:string"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="employee" type="EmployeeType"/>
+</xs:schema>`,
+        },
+        {
+          id: "tree-group-attrgroup",
+          label: "19. Tree - group + attributeGroup",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:group name="NameGroup">
+    <xs:sequence>
+      <xs:element name="firstName" type="xs:string"/>
+      <xs:element name="lastName" type="xs:string"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:attributeGroup name="AuditAttrs">
+    <xs:attribute name="createdBy" type="xs:string"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="UserType">
+    <xs:sequence>
+      <xs:group ref="NameGroup"/>
+    </xs:sequence>
+    <xs:attributeGroup ref="AuditAttrs"/>
+  </xs:complexType>
+
+  <xs:element name="user" type="UserType"/>
+</xs:schema>`,
+        },
+        {
+          id: "tree-element-ref",
+          label: "20. Tree - element ref",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="name" type="xs:string"/>
+
+  <xs:element name="person">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="name"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "sample-min-sequence",
+          label: "21. Sample - minimal sequence",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+        <xs:element name="body" type="xs:string" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute name="priority" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+        },
+        {
+          id: "sample-choice",
+          label: "22. Sample - choice",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="ContactType">
+    <xs:choice>
+      <xs:element name="email" type="xs:string"/>
+      <xs:element name="phone" type="xs:string"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:element name="contact" type="ContactType"/>
+</xs:schema>`,
+        },
+        {
+          id: "sample-extension",
+          label: "23. Sample - extension",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="PersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="EmployeeType">
+    <xs:complexContent>
+      <xs:extension base="PersonType">
+        <xs:sequence>
+          <xs:element name="department" type="xs:string"/>
+        </xs:sequence>
+        <xs:attribute name="role" type="xs:string"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="employee" type="EmployeeType"/>
+</xs:schema>`,
+        },
+        {
+          id: "sample-group-attrgroup",
+          label: "24. Sample - group + attributeGroup",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:group name="NameGroup">
+    <xs:sequence>
+      <xs:element name="firstName" type="xs:string"/>
+      <xs:element name="lastName" type="xs:string"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:attributeGroup name="AuditAttrs">
+    <xs:attribute name="createdBy" type="xs:string"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="UserType">
+    <xs:sequence>
+      <xs:group ref="NameGroup"/>
+    </xs:sequence>
+    <xs:attributeGroup ref="AuditAttrs"/>
+  </xs:complexType>
+
+  <xs:element name="user" type="UserType"/>
+</xs:schema>`,
+        },
+        {
+          id: "sample-enum",
+          label: "25. Sample - enumeration simpleType",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="StatusType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="OPEN"/>
+      <xs:enumeration value="CLOSED"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="status" type="StatusType"/>
+</xs:schema>`,
+        },
+        {
+  id: "xml-valid-sequence",
+  label: "26. XML - valid sequence",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+      <xs:attribute name="priority" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note priority="high">
+  <to>Alice</to>
+  <from>Bob</from>
+</note>`
+},
+{
+  id: "xml-missing-required-element",
+  label: "27. XML - missing required element",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note>
+  <to>Alice</to>
+</note>`
+},
+{
+  id: "xml-unexpected-element",
+  label: "28. XML - unexpected element",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note>
+  <to>Alice</to>
+  <extra>Oops</extra>
+</note>`
+},
+{
+  id: "xml-missing-required-attribute",
+  label: "29. XML - missing required attribute",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+      <xs:attribute name="priority" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note>
+  <to>Alice</to>
+</note>`
+},
+{
+  id: "xml-choice-valid",
+  label: "30. XML - choice valid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="contact">
+    <xs:complexType>
+      <xs:choice>
+        <xs:element name="email" type="xs:string"/>
+        <xs:element name="phone" type="xs:string"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<contact>
+  <email>alice@example.com</email>
+</contact>`
+},
+{
+  id: "xml-choice-invalid",
+  label: "31. XML - choice invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="contact">
+    <xs:complexType>
+      <xs:choice>
+        <xs:element name="email" type="xs:string"/>
+        <xs:element name="phone" type="xs:string"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<contact>
+  <fax>123</fax>
+</contact>`
+},
+{
+  id: "xml-enum-invalid",
+  label: "32. XML - enumeration invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="StatusType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="OPEN"/>
+      <xs:enumeration value="CLOSED"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="status" type="StatusType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<status>PENDING</status>`
+},
+{
+  id: "xml-builtin-invalid",
+  label: "33. XML - builtin type invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="age" type="xs:int"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<age>abc</age>`
+},
+{
+  id: "xml-minlength-invalid",
+  label: "34. XML - minLength invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="CodeType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="code" type="CodeType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<code>ABC</code>`
+},
+{
+  id: "xml-maxlength-invalid",
+  label: "35. XML - maxLength invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="ShortCodeType">
+    <xs:restriction base="xs:string">
+      <xs:maxLength value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="code" type="ShortCodeType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<code>ABCDE</code>`
+},
+{
+  id: "xml-pattern-invalid",
+  label: "36. XML - pattern invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="UpperCodeType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="code" type="UpperCodeType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<code>abc123</code>`
+},
+{
+  id: "xml-mininclusive-invalid",
+  label: "37. XML - minInclusive invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="AgeType">
+    <xs:restriction base="xs:int">
+      <xs:minInclusive value="18"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="age" type="AgeType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<age>12</age>`
+},
+{
+  id: "xml-maxexclusive-invalid",
+  label: "38. XML - maxExclusive invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="ScoreType">
+    <xs:restriction base="xs:decimal">
+      <xs:maxExclusive value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="score" type="ScoreType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<score>100</score>`
+},
+{
+  id: "xml-totaldigits-invalid",
+  label: "39. XML - totalDigits invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="AmountType">
+    <xs:restriction base="xs:decimal">
+      <xs:totalDigits value="4"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="amount" type="AmountType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<amount>12345</amount>`
+},
+{
+  id: "xml-fractiondigits-invalid",
+  label: "40. XML - fractionDigits invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="PriceType">
+    <xs:restriction base="xs:decimal">
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="price" type="PriceType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<price>12.345</price>`
+},
+{
+  id: "sample-pattern-length",
+  label: "41. Sample - pattern and length",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="UpperCodeType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z]+"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="6"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="code" type="UpperCodeType"/>
+</xs:schema>`
+},
+{
+  id: "sample-numeric-facets",
+  label: "42. Sample - numeric facets",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="AmountType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="10.5"/>
+      <xs:fractionDigits value="2"/>
+      <xs:totalDigits value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="amount" type="AmountType"/>
+</xs:schema>`
+},
+{
+  id: "xsd-length-conflict",
+  label: "43. XSD - length conflict",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="BadLength">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="5"/>
+      <xs:maxLength value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>`
+},
+{
+  id: "xsd-numeric-conflict",
+  label: "44. XSD - numeric conflict",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="BadRange">
+    <xs:restriction base="xs:int">
+      <xs:minInclusive value="10"/>
+      <xs:maxInclusive value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>`
+},
+{
+  id: "xsd-pattern-invalid",
+  label: "45. XSD - invalid pattern",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="BadPattern">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z+"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>`
+},
+{
+  id: "xsd-facet-invalid",
+  label: "46. XSD - invalid facet for type",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="BadFacet">
+    <xs:restriction base="xs:boolean">
+      <xs:minLength value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>`
+},
+{
+  id: "xsd-digit-conflict",
+  label: "47. XSD - digit conflict",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="BadDigits">
+    <xs:restriction base="xs:decimal">
+      <xs:totalDigits value="2"/>
+      <xs:fractionDigits value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>`
+},
+{
+  id: "ns-prefixed-type",
+  label: "48. NS - prefixed type reference",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:complexType name="PersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="person" type="tns:PersonType"/>
+</xs:schema>`
+},
+{
+  id: "ns-prefixed-ref",
+  label: "49. NS - prefixed element ref",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:element name="name" type="xs:string"/>
+
+  <xs:element name="person">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="tns:name"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`
+},
+{
+  id: "ns-qualified-xml-valid",
+  label: "50. NS - qualified XML valid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<tns:note xmlns:tns="urn:test">
+  <tns:to>Alice</tns:to>
+</tns:note>`
+},
+{
+  id: "ns-qualified-xml-invalid",
+  label: "51. NS - qualified XML wrong namespace",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<abc:note xmlns:abc="urn:wrong">
+  <abc:to>Alice</abc:to>
+</abc:note>`
+}
+      ];
+
+      const testCaseSelect = document.getElementById("testCaseSelect");
+      const loadCaseBtn = document.getElementById("loadCaseBtn");
+      const runDiagnosticsBtn = document.getElementById("runDiagnosticsBtn");
+      const runTreeBtn = document.getElementById("runTreeBtn");
+      const rootElementNameInput = document.getElementById(
+        "rootElementNameInput",
+      );
+      const xsdInput = document.getElementById("xsdInput");
+      const summaryEl = document.getElementById("summary");
+      const issuesEl = document.getElementById("issues");
+      const rawResultEl = document.getElementById("rawResult");
+      const runSampleBtn = document.getElementById("runSampleBtn");
+      const runValidateXmlBtn = document.getElementById("runValidateXmlBtn");
+      const xmlInput = document.getElementById("xmlInput");
+
+      function populateCases() {
+        testCaseSelect.innerHTML = "";
+        for (const testCase of TEST_CASES) {
+          const option = document.createElement("option");
+          option.value = testCase.id;
+          option.textContent = testCase.label;
+          testCaseSelect.appendChild(option);
+        }
+      }
+
+      function runXmlValidation() {
+        const rootElementName = rootElementNameInput.value.trim();
+
+        const result = validateXml({
+          xsdText: xsdInput.value,
+          xmlText: xmlInput.value,
+          options: {
+            rootElementName: rootElementName || undefined,
+          },
+        });
+
+        renderSummary(result);
+        renderIssues(result);
+        rawResultEl.textContent = JSON.stringify(result, null, 2);
+        console.log("validateXml result:", result);
+      }
+
+      function runSampleGeneration() {
+        const rootElementName = rootElementNameInput.value.trim();
+
+        const result = generateSampleXml({
+          xsdText: xsdInput.value,
+          options: {
+            rootElementName: rootElementName || undefined,
+            mode: "minimal",
+            includeOptionalAttributes: true,
+          },
+        });
+
+        renderSummary(result);
+        renderIssues(result);
+        rawResultEl.textContent = JSON.stringify(result, null, 2);
+        console.log("generateSampleXml result:", result);
+      }
+
+      function runTreeExtraction() {
+        const rootElementName = rootElementNameInput.value.trim();
+
+        const result = extractSchemaTree({
+          xsdText: xsdInput.value,
+          options: {
+            rootElementName: rootElementName || undefined,
+            expandRefs: true,
+          },
+        });
+
+        renderSummary(result);
+        renderIssues(result);
+        rawResultEl.textContent = JSON.stringify(result, null, 2);
+        console.log("extractSchemaTree result:", result);
+      }
+
+      function getSelectedCase() {
+        return (
+          TEST_CASES.find((item) => item.id === testCaseSelect.value) ||
+          TEST_CASES[0]
+        );
+      }
+
+      function loadSelectedCase() {
+        const testCase = getSelectedCase();
+        xsdInput.value = testCase.xsd;
+        xmlInput.value = testCase.xml || "";
+      }
+
+      function renderSummary(result) {
+        summaryEl.innerHTML = "";
+
+        const pills = [
+          { text: `ok: ${result.ok}`, cls: result.ok ? "ok" : "error" },
+          {
+            text: `errors: ${result.summary.errorCount}`,
+            cls: result.summary.errorCount ? "error" : "",
+          },
+          {
+            text: `warnings: ${result.summary.warningCount}`,
+            cls: result.summary.warningCount ? "warning" : "",
+          },
+          { text: `infos: ${result.summary.infoCount}`, cls: "" },
+        ];
+
+        if (result.data?.schemaStats) {
+          pills.push({
+            text: `roots: ${result.data.roots?.length || 0}`,
+            cls: "",
+          });
+          pills.push({
+            text: `global elements: ${result.data.schemaStats.globalElementCount}`,
+            cls: "",
+          });
+          pills.push({
+            text: `complex types: ${result.data.schemaStats.globalComplexTypeCount}`,
+            cls: "",
+          });
+          pills.push({
+            text: `simple types: ${result.data.schemaStats.globalSimpleTypeCount}`,
+            cls: "",
+          });
+        }
+
+        for (const pill of pills) {
+          const div = document.createElement("div");
+          div.className = `pill ${pill.cls}`.trim();
+          div.textContent = pill.text;
+          summaryEl.appendChild(div);
+        }
+      }
+
+      function renderIssues(result) {
+        issuesEl.innerHTML = "";
+
+        if (!result.issues.length) {
+          const li = document.createElement("li");
+          li.textContent = "No issues.";
+          issuesEl.appendChild(li);
+          return;
+        }
+
+        for (const issue of result.issues) {
+          const li = document.createElement("li");
+
+          const head = document.createElement("div");
+          head.className = `sev-${issue.severity}`;
+          head.textContent = `[${issue.severity.toUpperCase()}] ${issue.code}: ${issue.message}`;
+          li.appendChild(head);
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = [
+            issue.line != null ? `line ${issue.line}` : null,
+            issue.column != null ? `column ${issue.column}` : null,
+            issue.nodeKind ? `node ${issue.nodeKind}` : null,
+            issue.name ? `name ${issue.name}` : null,
+            issue.path ? `path ${issue.path}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+          li.appendChild(meta);
+
+          issuesEl.appendChild(li);
+        }
+      }
+
+      function runDiagnostics() {
+        const result = getSchemaDiagnostics({
+          xsdText: xsdInput.value,
+          options: {
+            includeWarnings: true,
+            includeFeatureSummary: true,
+            includeRoots: true,
+          },
+        });
+
+        renderSummary(result);
+        renderIssues(result);
+        rawResultEl.textContent = JSON.stringify(result, null, 2);
+        console.log("getSchemaDiagnostics result:", result);
+      }
+
+      populateCases();
+      loadSelectedCase();
+      runDiagnostics();
+
+      loadCaseBtn.addEventListener("click", loadSelectedCase);
+      runDiagnosticsBtn.addEventListener("click", runDiagnostics);
+      runTreeBtn.addEventListener("click", runTreeExtraction);
+      runSampleBtn.addEventListener("click", runSampleGeneration);
+      runValidateXmlBtn.addEventListener("click", runXmlValidation);
+    </script>
+  </body>
+</html>

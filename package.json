@@ -1,0 +1,29 @@
+{
+  "name": "uss-xsd-engine",
+  "version": "0.1.0",
+  "description": "Browser-first XSD engine for parsing, diagnostics, tree extraction, sample XML generation, and XML validation.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "echo \"Add test runner later\"",
+    "check": "echo \"No check script yet\""
+  },
+  "keywords": [
+    "xsd",
+    "xml",
+    "schema",
+    "browser",
+    "validation",
+    "xml-schema"
+  ],
+  "license": "MIT"
+}

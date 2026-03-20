@@ -37,6 +37,33 @@ function mergeAttributes(target, source) {
   Object.assign(target, source);
 }
 
+function shouldQualifyElement(schema, elementDecl, isRoot = false) {
+  if (isRoot) return !!elementDecl.namespaceUri;
+  return schema.elementFormDefault === "qualified" && !!elementDecl.namespaceUri;
+}
+
+function qualifiedElementName(schema, elementDecl, state, isRoot = false) {
+  const localName = elementDecl.name || elementDecl.refName || "element";
+
+  if (!shouldQualifyElement(schema, elementDecl, isRoot)) {
+    return localName.includes(":") ? localName.split(":")[1] : localName;
+  }
+
+  const prefix = state.targetPrefix || "tns";
+  const bare = localName.includes(":") ? localName.split(":")[1] : localName;
+  return `${prefix}:${bare}`;
+}
+
+function buildRootNamespaceAttributes(schema, rootDecl, state) {
+  const attrs = {};
+
+  if (rootDecl.namespaceUri) {
+    attrs[`xmlns:${state.targetPrefix}`] = rootDecl.namespaceUri;
+  }
+
+  return attrs;
+}
+
 function buildAttributesObject(schema, attributes, options, state) {
   const out = {};
 
@@ -46,8 +73,10 @@ function buildAttributesObject(schema, attributes, options, state) {
     if (attr.kind === "attribute") {
       if (attr.use !== "required" && !options.includeOptionalAttributes) continue;
 
+      const attrName = attr.name || attr.refName || "attr";
       const resolvedType = resolveAttributeType(schema, attr);
-      out[attr.name || attr.refName || "attr"] =
+
+      out[attrName] =
         attr.fixedValue ??
         attr.defaultValue ??
         createSampleValueForType(schema, resolvedType);
@@ -94,7 +123,7 @@ function buildNodesFromContent(schema, contentNode, options, state) {
     }
 
     case "element":
-      return buildElementInstances(schema, contentNode, options, state);
+      return buildElementInstances(schema, contentNode, options, state, false);
 
     case "any":
       return options.mode === "full"
@@ -120,13 +149,12 @@ function buildSimpleTypeText(schema, simpleTypeDecl) {
   return createSampleValueForType(schema, simpleTypeDecl);
 }
 
-function buildElementNode(schema, elementDecl, options, state) {
-  const elementName = elementDecl.name || elementDecl.refName || "element";
+function buildElementNode(schema, elementDecl, options, state, isRoot = false) {
   const resolvedType = resolveElementType(schema, elementDecl);
 
   const node = {
-    name: elementName,
-    attributes: {},
+    name: qualifiedElementName(schema, elementDecl, state, isRoot),
+    attributes: isRoot ? buildRootNamespaceAttributes(schema, elementDecl, state) : {},
     children: [],
     text: null
   };
@@ -141,7 +169,10 @@ function buildElementNode(schema, elementDecl, options, state) {
 
   if (resolvedType?.kind === "complexType") {
     const built = buildComplexTypeContent(schema, resolvedType, options, state);
-    node.attributes = built.attributes;
+    node.attributes = {
+      ...node.attributes,
+      ...built.attributes
+    };
     node.children = built.children;
     return node;
   }
@@ -158,7 +189,7 @@ function buildElementNode(schema, elementDecl, options, state) {
   return node;
 }
 
-function buildElementInstances(schema, elementDecl, options, state) {
+function buildElementInstances(schema, elementDecl, options, state, isRoot = false) {
   if (elementDecl.refName) {
     const target = resolveGlobalElement(schema, elementDecl.refName);
     if (target) {
@@ -167,7 +198,7 @@ function buildElementInstances(schema, elementDecl, options, state) {
         minOccurs: elementDecl.minOccurs,
         maxOccurs: elementDecl.maxOccurs
       };
-      return buildElementInstances(schema, mergedDecl, options, state);
+      return buildElementInstances(schema, mergedDecl, options, state, isRoot);
     }
   }
 
@@ -175,7 +206,7 @@ function buildElementInstances(schema, elementDecl, options, state) {
   const result = [];
 
   for (let i = 0; i < count; i += 1) {
-    result.push(buildElementNode(schema, elementDecl, options, state));
+    result.push(buildElementNode(schema, elementDecl, options, state, isRoot && i === 0));
   }
 
   return result;
@@ -204,10 +235,11 @@ export function generateXmlFromSchema(schema, options = {}, helpers = {}) {
   }
 
   const state = {
-    resolveAttributeGroup: helpers.resolveAttributeGroup
+    resolveAttributeGroup: helpers.resolveAttributeGroup,
+    targetPrefix: options.targetPrefix || "tns"
   };
 
-  const [rootNode] = buildElementInstances(schema, root, normalizedOptions, state);
+  const [rootNode] = buildElementInstances(schema, root, normalizedOptions, state, true);
 
   return {
     rootElementName: root.name,

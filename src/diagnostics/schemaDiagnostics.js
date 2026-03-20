@@ -9,6 +9,9 @@ import {
   resolveType
 } from "../resolver/schemaResolvers.js";
 import { runFacetDiagnostics } from "./schemaFacetDiagnostics.js";      
+import { runRestrictionDiagnostics } from "./schemaRestrictionDiagnostics.js";
+import { runDefaultFixedDiagnostics } from "./schemaDefaultFixedDiagnostics.js";
+import { runImportDiagnostics } from "./schemaImportDiagnostics.js";
 
 function buildStats(schema) {
   return {
@@ -205,6 +208,15 @@ export function runSchemaDiagnostics(schema, options = {}) {
 
   const facetIssues = runFacetDiagnostics(schema, options);
   issues.push(...facetIssues);
+
+  const restrictionIssues = runRestrictionDiagnostics(schema);
+  issues.push(...restrictionIssues);
+
+  const defaultFixedIssues = runDefaultFixedDiagnostics(schema);
+  issues.push(...defaultFixedIssues);
+
+  const importIssues = runImportDiagnostics(schema, options);
+  issues.push(...importIssues);
 
   return {
     data: {

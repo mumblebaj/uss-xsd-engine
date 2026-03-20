@@ -8,14 +8,47 @@ import {
 import { validateBuiltinType } from "./builtinTypeValidators.js";
 import { validateFacets } from "./facetUtils.js";
 
-export function validateElementValue(schema, elementDecl, value) {
-  const resolvedType = resolveElementType(schema, elementDecl);
+function validateByDeclType(schema, decl, value, kindLabel) {
+  const resolvedType =
+    kindLabel === "attribute"
+      ? resolveAttributeType(schema, decl)
+      : resolveElementType(schema, decl);
+
   return validateResolvedValue(schema, resolvedType, value);
 }
 
-export function validateAttributeValue(schema, attributeDecl, value) {
-  const resolvedType = resolveAttributeType(schema, attributeDecl);
-  return validateResolvedValue(schema, resolvedType, value);
+export function validateElementValue(schema, elementDecl, value) {
+  const fixed = elementDecl.fixedValue;
+
+  if (fixed != null) {
+    if (value !== fixed) {
+      return {
+        ok: false,
+        code: "XML_FIXED_VALUE_MISMATCH",
+        message: `Element '${elementDecl.name || elementDecl.refName}' must have fixed value '${fixed}'.`
+      };
+    }
+    return { ok: true, code: null, message: null };
+  }
+
+  return validateByDeclType(schema, elementDecl, value, "element");
+}
+
+export function validateAttributeValue(schema, attrDecl, value) {
+  const fixed = attrDecl.fixedValue;
+
+  if (fixed != null) {
+    if (value !== fixed) {
+      return {
+        ok: false,
+        code: "XML_FIXED_VALUE_MISMATCH",
+        message: `Attribute '${attrDecl.name || attrDecl.refName}' must have fixed value '${fixed}'.`
+      };
+    }
+    return { ok: true, code: null, message: null };
+  }
+
+  return validateByDeclType(schema, attrDecl, value, "attribute");
 }
 
 export function validateResolvedValue(schema, resolvedType, value) {
@@ -49,7 +82,7 @@ export function validateResolvedValue(schema, resolvedType, value) {
       }
     }
 
-    if (effective.baseTypeName && isBuiltinType(effective.baseTypeName)) {
+    if (effective.baseTypeName && isBuiltinType(effective.baseTypeName, schema)) {
       const local = stripNamespacePrefix(effective.baseTypeName);
       const builtinOk = validateBuiltinType(local, value);
 

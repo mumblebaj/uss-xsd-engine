@@ -168,6 +168,11 @@
         <button id="runTreeBtn">Run tree extraction</button>
         <button id="runSampleBtn">Generate sample XML</button>
         <button id="runValidateXmlBtn">Validate XML</button>
+        <input
+  id="targetPrefixInput"
+  placeholder="Sample XML prefix (default tns)"
+  style="padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);min-width:220px;"
+/>
       </div>
 
       <input
@@ -215,6 +220,27 @@
         generateSampleXml,
         validateXml,
       } from "./src/index.js";
+
+      const EXTERNAL_DOCUMENTS = {
+  "common.xsd": `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="CommonPersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`,
+  "common-import.xsd": `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:common">
+  <xs:complexType name="CommonPersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`
+};
 
       const TEST_CASES = [
         {
@@ -1085,6 +1111,347 @@
 <abc:note xmlns:abc="urn:wrong">
   <abc:to>Alice</abc:to>
 </abc:note>`
+},
+{
+  id: "xml-mixed-invalid",
+  label: "52. XML - mixed content invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note>hello<to>Alice</to></note>`
+},
+{
+  id: "xml-mixed-valid",
+  label: "53. XML - mixed content allowed",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note">
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<note>hello<to>Alice</to></note>`
+},
+{
+  id: "xml-choice-ambiguous",
+  label: "54. XML - choice ambiguous branches",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:choice>
+        <xs:element name="item" type="xs:string"/>
+        <xs:element name="item" type="xs:string"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<root><item>a</item></root>`
+},
+{
+  id: "xml-all-missing-required",
+  label: "55. XML - all missing required",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="person">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="firstName" type="xs:string"/>
+        <xs:element name="lastName" type="xs:string"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<person><firstName>Alice</firstName></person>`
+},
+{
+  id: "xml-restriction-firstpass",
+  label: "56. XML - restriction first pass",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="BaseType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="age" type="xs:int" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RestrictedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:sequence>
+          <xs:element name="name" type="xs:string"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="person" type="RestrictedType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<person>
+  <name>Alice</name>
+  <age>10</age>
+</person>`
+},
+{
+  id: "sample-ns-root",
+  label: "57. Sample - namespace root",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`
+},
+{
+  id: "sample-ns-named-type",
+  label: "58. Sample - namespace named type",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:complexType name="PersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="person" type="tns:PersonType"/>
+</xs:schema>`
+},
+{
+  id: "sample-ns-extension",
+  label: "59. Sample - namespace extension",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:complexType name="BaseType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EmployeeType">
+    <xs:complexContent>
+      <xs:extension base="tns:BaseType">
+        <xs:sequence>
+          <xs:element name="department" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="employee" type="tns:EmployeeType"/>
+</xs:schema>`
+},
+{
+  id: "xsd-restriction-illegal-element",
+  label: "60. XSD - restriction adds illegal element",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="BaseType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RestrictedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:sequence>
+          <xs:element name="name" type="xs:string"/>
+          <xs:element name="extra" type="xs:string"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>`
+},
+{
+  id: "xsd-restriction-occurs-widened",
+  label: "61. XSD - restriction widens occurs",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="BaseType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" minOccurs="1" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RestrictedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:sequence>
+          <xs:element name="name" type="xs:string" minOccurs="0" maxOccurs="2"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>`
+},
+{
+  id: "xsd-restriction-attribute-widened",
+  label: "62. XSD - restriction widens attribute",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="BaseType">
+    <xs:attribute name="id" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="RestrictedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:attribute name="id" type="xs:string" use="required"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+</xs:schema>`
+},
+{
+  id: "xml-restriction-illegal-element",
+  label: "63. XML - restriction illegal element",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="BaseType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="age" type="xs:int" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RestrictedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:sequence>
+          <xs:element name="name" type="xs:string"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="person" type="RestrictedType"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0" encoding="UTF-8"?>
+<person>
+  <name>Alice</name>
+  <age>10</age>
+</person>`
+},
+{
+  id: "xml-fixed-element-mismatch",
+  label: "64. XML - fixed element mismatch",
+  xsd: `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="status" fixed="OK" type="xs:string"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0"?>
+<status>FAIL</status>`
+},
+{
+  id: "xml-fixed-attribute-mismatch",
+  label: "65. XML - fixed attribute mismatch",
+  xsd: `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="item">
+    <xs:complexType>
+      <xs:attribute name="type" fixed="A"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<?xml version="1.0"?>
+<item type="B"/>`
+},
+{
+  id: "xml-default-allowed",
+  label: "66. XML - default allowed",
+  xsd: `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="status" default="OK" type="xs:string"/>
+</xs:schema>`,
+  xml: `<?xml version="1.0"?>
+<status/>`
+},
+{
+  id: "xsd-default-fixed-conflict",
+  label: "67. XSD - default and fixed conflict",
+  xsd: `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="status" default="OK" fixed="OK" type="xs:string"/>
+</xs:schema>`
+},
+{
+  id: "xsd-include-not-provided",
+  label: "68. XSD - include not provided",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:include schemaLocation="missing-common.xsd"/>
+  <xs:element name="person" type="CommonPersonType"/>
+</xs:schema>`
+},
+{
+  id: "xsd-include-provided",
+  label: "69. XSD - include provided",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:include schemaLocation="common.xsd"/>
+  <xs:element name="person" type="CommonPersonType"/>
+</xs:schema>`
+},
+{
+  id: "xsd-import-not-provided",
+  label: "70. XSD - import not provided",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:cmn="urn:common"
+  targetNamespace="urn:test">
+  <xs:import namespace="urn:common" schemaLocation="common-import.xsd"/>
+  <xs:element name="person" type="cmn:CommonPersonType"/>
+</xs:schema>`
+},
+{
+  id: "xsd-import-provided",
+  label: "71. XSD - import provided",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:cmn="urn:common"
+  targetNamespace="urn:test">
+  <xs:import namespace="urn:common" schemaLocation="common-import.xsd"/>
+  <xs:element name="person" type="cmn:CommonPersonType"/>
+</xs:schema>`
 }
       ];
 
@@ -1121,6 +1488,7 @@
           xmlText: xmlInput.value,
           options: {
             rootElementName: rootElementName || undefined,
+            externalDocuments: EXTERNAL_DOCUMENTS
           },
         });
 
@@ -1139,6 +1507,7 @@
             rootElementName: rootElementName || undefined,
             mode: "minimal",
             includeOptionalAttributes: true,
+            externalDocuments: EXTERNAL_DOCUMENTS
           },
         });
 
@@ -1156,6 +1525,7 @@
           options: {
             rootElementName: rootElementName || undefined,
             expandRefs: true,
+            externalDocuments: EXTERNAL_DOCUMENTS
           },
         });
 
@@ -1263,6 +1633,7 @@
             includeWarnings: true,
             includeFeatureSummary: true,
             includeRoots: true,
+            externalDocuments: EXTERNAL_DOCUMENTS
           },
         });
 

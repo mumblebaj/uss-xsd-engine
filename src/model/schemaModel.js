@@ -19,6 +19,12 @@ export function createEmptySchemaModel() {
       attributeGroups: Object.create(null)
     },
 
+    documents: [],
+    externalRefs: {
+      includes: [],
+      imports: []
+    },
+
     roots: [],
 
     references: {

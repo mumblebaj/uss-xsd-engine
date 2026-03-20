@@ -10,12 +10,20 @@ function elementChildren(xmlNode) {
   return Array.from(xmlNode?.children || []).filter((child) => child.nodeType === 1);
 }
 
+function directTextNodes(xmlNode) {
+  return Array.from(xmlNode?.childNodes || []).filter((node) => node.nodeType === 3);
+}
+
 function textContentTrimmed(xmlNode) {
   return (xmlNode?.textContent || "").trim();
 }
 
 function localName(node) {
   return node?.localName || node?.nodeName || null;
+}
+
+function namespaceUri(node) {
+  return node?.namespaceURI || null;
 }
 
 function repeatMin(minOccurs) {
@@ -28,8 +36,16 @@ function repeatMax(maxOccurs) {
 
 function matchesElementDecl(xmlNode, elementDecl) {
   const xmlName = localName(xmlNode);
+  const xmlNs = namespaceUri(xmlNode);
+
   const declName = elementDecl.refName || elementDecl.name;
-  return xmlName === declName;
+  const declLocal = declName?.includes(":") ? declName.split(":")[1] : declName;
+  const declNs = elementDecl.namespaceUri || null;
+
+  if (xmlName !== declLocal) return false;
+  if (declNs == null) return true;
+
+  return xmlNs === declNs;
 }
 
 function buildXmlPath(pathParts) {
@@ -60,7 +76,7 @@ export function validateAttributes(xmlNode, attributes, context) {
     const attrName = attrDecl.name || attrDecl.refName;
     const value = xmlNode.getAttribute(attrName);
 
-    if ((attrDecl.use === "required") && value == null) {
+    if (attrDecl.use === "required" && value == null) {
       issues.push(
         createIssue({
           code: ISSUE_CODES.XML_MISSING_REQUIRED_ATTRIBUTE,
@@ -96,6 +112,15 @@ export function validateAttributes(xmlNode, attributes, context) {
   }
 
   for (const attr of Array.from(xmlNode.attributes || [])) {
+    // Ignore namespace declarations
+    if (
+      attr.name === "xmlns" ||
+      attr.name.startsWith("xmlns:") ||
+      attr.prefix === "xmlns"
+    ) {
+      continue;
+    }
+
     if (!allowed.has(attr.name)) {
       issues.push(
         createIssue({
@@ -134,17 +159,39 @@ function validateSimpleElement(xmlNode, elementDecl, context) {
   }
 }
 
+function validateMixedContent(xmlNode, complexTypeDecl, context, pathParts) {
+  const { createIssue, ISSUE_CODES, issues } = context;
+  const hasDirectText = directTextNodes(xmlNode).some((node) => node.nodeValue?.trim());
+
+  if (!complexTypeDecl.mixed && hasDirectText) {
+    issues.push(
+      createIssue({
+        code: ISSUE_CODES.XML_MIXED_CONTENT_NOT_ALLOWED,
+        severity: "error",
+        message: "Mixed text content is not allowed for this complex type.",
+        path: buildXmlPath(pathParts),
+        source: "xml",
+        nodeKind: "element",
+        name: localName(xmlNode),
+        details: {}
+      })
+    );
+  }
+}
+
 function validateComplexElement(xmlNode, complexTypeDecl, context) {
   const { schema, createIssue, ISSUE_CODES, issues, pathParts } = context;
 
   const attributes = getEffectiveAttributes(schema, complexTypeDecl);
   validateAttributes(xmlNode, attributes, context);
 
+  validateMixedContent(xmlNode, complexTypeDecl, context, pathParts);
+
   const text = textContentTrimmed(xmlNode);
   const children = elementChildren(xmlNode);
   const content = getEffectiveContent(schema, complexTypeDecl);
 
-  if (children.length === 0 && text && content) {
+  if (!complexTypeDecl.mixed && children.length === 0 && text && content) {
     issues.push(
       createIssue({
         code: ISSUE_CODES.XML_INVALID_TEXT_FOR_COMPLEX_TYPE,
@@ -284,7 +331,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
   let index = startIndex;
 
   while (count < max) {
-    let matchedBranch = null;
+    let matchedBranches = [];
 
     for (const childDecl of choiceNode.children || []) {
       const snapshotIssuesLength = context.issues.length;
@@ -292,15 +339,30 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
 
       if (result.matchedAny) {
         context.issues.length = snapshotIssuesLength;
-        matchedBranch = result;
-        break;
+        matchedBranches.push(result);
+      } else {
+        context.issues.length = snapshotIssuesLength;
       }
-
-      context.issues.length = snapshotIssuesLength;
     }
 
-    if (!matchedBranch) break;
+    if (matchedBranches.length === 0) break;
 
+    if (matchedBranches.length > 1 && !silent) {
+      context.issues.push(
+        context.createIssue({
+          code: context.ISSUE_CODES.XML_CHOICE_MULTIPLE_BRANCHES,
+          severity: "error",
+          message: "Multiple xs:choice branches appear to match at the same position.",
+          path: buildXmlPath(pathParts),
+          source: "xml",
+          nodeKind: "choice",
+          name: null,
+          details: {}
+        })
+      );
+    }
+
+    const matchedBranch = matchedBranches[0];
     index = matchedBranch.nextIndex;
     count += 1;
   }
@@ -324,43 +386,47 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
 }
 
 function validateAll(children, startIndex, allNode, context, pathParts, silent = false) {
-  const requiredDecls = (allNode.children || []).filter((child) => repeatMin(child.minOccurs) > 0);
-  const optionalDecls = (allNode.children || []).filter((child) => repeatMin(child.minOccurs) === 0);
-  const pool = [...requiredDecls, ...optionalDecls];
-
+  const members = allNode.children || [];
+  const matchedIndexes = new Set();
   let index = startIndex;
-  const consumed = new Set();
-  let progress = true;
 
-  while (index < children.length && progress) {
-    progress = false;
+  while (index < children.length) {
+    let matchedMemberIndex = -1;
 
-    for (let i = 0; i < pool.length; i += 1) {
-      if (consumed.has(i)) continue;
+    for (let i = 0; i < members.length; i += 1) {
+      if (matchedIndexes.has(i)) continue;
 
-      const result = validateContentModel(children, pool[i], context, pathParts, index, true);
+      const result = validateContentModel(children, members[i], context, pathParts, index, true);
       if (result.matchedAny) {
-        consumed.add(i);
+        matchedMemberIndex = i;
         index = result.nextIndex;
-        progress = true;
         break;
       }
     }
+
+    if (matchedMemberIndex < 0) break;
+    matchedIndexes.add(matchedMemberIndex);
   }
 
   if (!silent) {
-    for (const req of requiredDecls) {
-      const found = pool.some((candidate, idx) => consumed.has(idx) && candidate === req);
-      if (!found) {
+    for (let i = 0; i < members.length; i += 1) {
+      const member = members[i];
+      const min = repeatMin(member.minOccurs);
+
+      if (matchedIndexes.has(i) && maxOccursIsSingle(member)) {
+        // ok
+      }
+
+      if (!matchedIndexes.has(i) && min > 0) {
         context.issues.push(
           context.createIssue({
             code: context.ISSUE_CODES.XML_ALL_MISSING_REQUIRED_ELEMENT,
             severity: "error",
-            message: `Required xs:all child '${req.name || req.refName}' is missing.`,
+            message: `Required xs:all child '${member.name || member.refName}' is missing.`,
             path: buildXmlPath(pathParts),
             source: "xml",
             nodeKind: "all",
-            name: req.name || req.refName,
+            name: member.name || member.refName,
             details: {}
           })
         );
@@ -368,13 +434,75 @@ function validateAll(children, startIndex, allNode, context, pathParts, silent =
     }
   }
 
-  return { nextIndex: index, matched: consumed.size > 0 || requiredDecls.length === 0, matchedAny: consumed.size > 0 };
+  return {
+    nextIndex: index,
+    matched: matchedIndexes.size > 0 || members.every((m) => repeatMin(m.minOccurs) === 0),
+    matchedAny: matchedIndexes.size > 0
+  };
+}
+
+function maxOccursIsSingle(member) {
+  return member.maxOccurs == null || member.maxOccurs === 1;
+}
+
+function flattenAllowedNames(node, out = new Set()) {
+  if (!node) return out;
+
+  switch (node.kind) {
+    case "sequence":
+    case "choice":
+    case "all":
+      for (const child of node.children || []) {
+        flattenAllowedNames(child, out);
+      }
+      return out;
+
+    case "groupRef":
+      out.add(node.refName);
+      return out;
+
+    case "element":
+      out.add(node.refName || node.name);
+      return out;
+
+    default:
+      return out;
+  }
+}
+
+function validateRestrictionCompatibility(modelNode, context, pathParts, children = [], startIndex = 0) {
+  if (!context.currentComplexType?.derivation) return;
+
+  const derivation = context.currentComplexType.derivation;
+  if (derivation.kind !== "restriction") return;
+
+  const allowedNames = flattenAllowedNames(modelNode, new Set());
+
+  for (let i = startIndex; i < children.length; i += 1) {
+    const childName = localName(children[i]);
+    if (!allowedNames.has(childName)) {
+      context.issues.push(
+        context.createIssue({
+          code: context.ISSUE_CODES.XML_RESTRICTED_ELEMENT_NOT_ALLOWED,
+          severity: "error",
+          message: `Element '${childName}' is not allowed by the restricted content model.`,
+          path: buildXmlPath([...pathParts, childName]),
+          source: "xml",
+          nodeKind: "element",
+          name: childName,
+          details: {}
+        })
+      );
+    }
+  }
 }
 
 export function validateContentModel(children, modelNode, context, pathParts, startIndex = 0, silent = false) {
   if (!modelNode) {
     return { nextIndex: startIndex, matched: true, matchedAny: false };
   }
+
+  validateRestrictionCompatibility(modelNode, context, pathParts, children, startIndex);
 
   switch (modelNode.kind) {
     case "element": {

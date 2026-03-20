@@ -2,6 +2,7 @@ import { createIssue } from "../diagnostics/createIssue.js";
 import { ISSUE_CODES } from "../diagnostics/issueCodes.js";
 import {
   getEffectiveAttributes,
+  getEffectiveContent,
   resolveGlobalElement,
   resolveType
 } from "../resolver/schemaResolvers.js";
@@ -42,11 +43,25 @@ function parseXml(xmlText) {
   return { ok: true, doc, issues: [] };
 }
 
-function determineRootElement(schema, xmlRootName, options) {
+function determineRootElement(schema, xmlRootName, xmlRootNs, options) {
   if (options.rootElementName) {
     return resolveGlobalElement(schema, options.rootElementName);
   }
-  return resolveGlobalElement(schema, xmlRootName);
+
+  const candidates = Object.values(schema?.globals?.elements || {});
+  return (
+    candidates.find(
+      (decl) =>
+        decl.name === xmlRootName &&
+        (decl.namespaceUri || null) === (xmlRootNs || null)
+    ) ||
+    candidates.find(
+      (decl) =>
+        decl.name === xmlRootName &&
+        (decl.namespaceUri == null || decl.namespaceUri === "")
+    ) ||
+    null
+  );
 }
 
 export function validateXmlAgainstSchema(schema, xmlText, options = {}, helpers = {}) {
@@ -78,7 +93,7 @@ export function validateXmlAgainstSchema(schema, xmlText, options = {}, helpers 
     };
   }
 
-  const schemaRoot = determineRootElement(schema, xmlRootName, options);
+  const schemaRoot = determineRootElement(schema, xmlRootName, xmlRootNs, options);
 
   if (!schemaRoot) {
     issues.push(
@@ -160,16 +175,49 @@ export function validateXmlAgainstSchema(schema, xmlText, options = {}, helpers 
   const resolvedRootType = resolveType(schema, schemaRoot.typeName) || schemaRoot.inlineType;
 
   if (resolvedRootType?.kind === "complexType") {
-    validateAttributes(xmlRoot, getEffectiveAttributes(schema, resolvedRootType), {
+    const rootContext = {
       ...context,
-      pathParts: [xmlRootName]
-    });
+      pathParts: [xmlRootName],
+      currentComplexType: resolvedRootType
+    };
+
+    validateAttributes(xmlRoot, getEffectiveAttributes(schema, resolvedRootType), rootContext);
+
+    const hasDirectText = Array.from(xmlRoot.childNodes || []).some(
+      (node) => node.nodeType === 3 && node.nodeValue?.trim()
+    );
+
+    if (!resolvedRootType.mixed && hasDirectText) {
+      issues.push(
+        createIssue({
+          code: ISSUE_CODES.XML_MIXED_CONTENT_NOT_ALLOWED,
+          severity: "error",
+          message: "Mixed text content is not allowed for this complex type.",
+          path: `/${xmlRootName}`,
+          source: "xml",
+          nodeKind: "element",
+          name: xmlRootName,
+          details: {}
+        })
+      );
+    }
 
     const children = elementChildren(xmlRoot);
-    const content = resolvedRootType ? resolvedRootType.content || null : null;
+    const content =
+      resolvedRootType?.kind === "complexType"
+        ? getEffectiveContent(schema, resolvedRootType)
+        : null;
 
     if (content) {
-      const result = validateContentModel(children, content, context, [xmlRootName], 0, false);
+      const result = validateContentModel(
+        children,
+        content,
+        rootContext,
+        [xmlRootName],
+        0,
+        false
+      );
+
       if (result.nextIndex < children.length) {
         for (let i = result.nextIndex; i < children.length; i += 1) {
           const childName = localName(children[i]);

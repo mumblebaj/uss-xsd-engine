@@ -30,8 +30,6 @@ const UNSUPPORTED_NODE_FEATURES = new Set([
   "unique",
   "any",
   "anyAttribute",
-  "import",
-  "include",
   "redefine",
   "notation",
 ]);
@@ -56,6 +54,78 @@ const SUPPORTED_NODE_FEATURES = new Set([
 function elementChildren(node) {
   return Array.from(node?.children || []).filter(
     (child) => child.nodeType === 1,
+  );
+}
+
+function recordExternalRef(schema, kind, node, path, loc) {
+  const entry = {
+    kind,
+    namespace: node.getAttribute("namespace") || null,
+    schemaLocation: node.getAttribute("schemaLocation") || null,
+    line: loc.line,
+    column: loc.column,
+    path,
+  };
+
+  if (kind === "include") {
+    schema.externalRefs.includes.push(entry);
+  } else if (kind === "import") {
+    schema.externalRefs.imports.push(entry);
+  }
+}
+
+function mergeGlobalsIntoSchema(
+  targetSchema,
+  sourceSchema,
+  issues,
+  createDuplicateIssue,
+) {
+  const buckets = [
+    ["elements", "DUPLICATE_GLOBAL_ELEMENT"],
+    ["complexTypes", "DUPLICATE_GLOBAL_COMPLEX_TYPE"],
+    ["simpleTypes", "DUPLICATE_GLOBAL_SIMPLE_TYPE"],
+    ["attributes", "DUPLICATE_GLOBAL_ATTRIBUTE"],
+    ["groups", "DUPLICATE_GLOBAL_GROUP"],
+    ["attributeGroups", "DUPLICATE_GLOBAL_ATTRIBUTE_GROUP"],
+  ];
+
+  for (const [bucketName, duplicateCode] of buckets) {
+    for (const [key, decl] of Object.entries(
+      sourceSchema.globals[bucketName] || {},
+    )) {
+      if (targetSchema.globals[bucketName][key]) {
+        issues.push(createDuplicateIssue(duplicateCode, decl));
+        continue;
+      }
+      targetSchema.globals[bucketName][key] = decl;
+    }
+  }
+
+  targetSchema.roots.push(...(sourceSchema.roots || []));
+  targetSchema.references.types.push(...(sourceSchema.references.types || []));
+  targetSchema.references.refs.push(...(sourceSchema.references.refs || []));
+  targetSchema.references.baseTypes.push(
+    ...(sourceSchema.references.baseTypes || []),
+  );
+  targetSchema.references.groupRefs.push(
+    ...(sourceSchema.references.groupRefs || []),
+  );
+  targetSchema.references.attributeGroupRefs.push(
+    ...(sourceSchema.references.attributeGroupRefs || []),
+  );
+
+  targetSchema.externalRefs.includes.push(
+    ...(sourceSchema.externalRefs.includes || []),
+  );
+  targetSchema.externalRefs.imports.push(
+    ...(sourceSchema.externalRefs.imports || []),
+  );
+
+  for (const feature of sourceSchema.usedFeatures || []) {
+    targetSchema.usedFeatures.add(feature);
+  }
+  targetSchema.unsupportedFeatures.push(
+    ...(sourceSchema.unsupportedFeatures || []),
   );
 }
 
@@ -1138,6 +1208,22 @@ export function buildSchemaModel(doc, options = {}) {
         break;
       }
 
+      case "include": {
+        const path = buildPath(rootPath, child);
+        const loc = locateNodeInSource(xsdText, lineStarts, child);
+        collectNodeDiagnostics(schema, issues, child, path, loc);
+        recordExternalRef(schema, "include", child, path, loc);
+        break;
+      }
+
+      case "import": {
+        const path = buildPath(rootPath, child);
+        const loc = locateNodeInSource(xsdText, lineStarts, child);
+        collectNodeDiagnostics(schema, issues, child, path, loc);
+        recordExternalRef(schema, "import", child, path, loc);
+        break;
+      }
+
       default: {
         const path = buildPath(rootPath, child);
         const loc = locateNodeInSource(xsdText, lineStarts, child);
@@ -1145,6 +1231,60 @@ export function buildSchemaModel(doc, options = {}) {
         break;
       }
     }
+  }
+
+  const externalDocuments = options.externalDocuments || {};
+
+  const createDuplicateIssue = (code, decl) =>
+    createIssue({
+      code: ISSUE_CODES[code] || code,
+      severity: "error",
+      message: `Duplicate global ${decl.kind} declaration '${decl.name}'.`,
+      line: decl.line,
+      column: decl.column,
+      path: decl.path,
+      source: "xsd",
+      nodeKind: decl.kind,
+      name: decl.name,
+      details: { declarationName: decl.name },
+    });
+
+  const allExternalRefs = [
+    ...(schema.externalRefs.includes || []),
+    ...(schema.externalRefs.imports || []),
+  ];
+
+  for (const ref of allExternalRefs) {
+    if (!ref.schemaLocation) continue;
+
+    const externalXsdText = externalDocuments[ref.schemaLocation];
+    if (!externalXsdText) continue;
+
+    const parser = new DOMParser();
+    const externalDoc = parser.parseFromString(
+      externalXsdText,
+      "application/xml",
+    );
+    const parserError = externalDoc.querySelector("parsererror");
+    if (parserError) {
+      continue;
+    }
+
+    const externalBuild = buildSchemaModel(externalDoc, {
+      ...options,
+      xsdText: externalXsdText,
+      externalDocuments: {},
+    });
+
+    if (externalBuild.schema) {
+      mergeGlobalsIntoSchema(
+        schema,
+        externalBuild.schema,
+        issues,
+        createDuplicateIssue,
+      );
+    }
+    issues.push(...(externalBuild.issues || []));
   }
 
   return { schema, issues };

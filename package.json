@@ -1,7 +1,7 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.1.0",
-  "description": "Browser-first XSD engine for parsing, diagnostics, tree extraction, sample XML generation, and XML validation.",
+  "version": "0.1.0-alpha.1",
+  "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "./src/index.js",
   "module": "./src/index.js",
@@ -14,16 +14,19 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "echo \"Add test runner later\"",
-    "check": "echo \"No check script yet\""
+    "test": "echo \"No automated test runner configured yet\"",
+    "check": "echo \"No check script configured yet\""
   },
   "keywords": [
     "xsd",
     "xml",
     "schema",
+    "xml-schema",
     "browser",
     "validation",
-    "xml-schema"
+    "generator",
+    "diagnostics"
   ],
+  "author": "Bernard Mumble",
   "license": "MIT"
 }

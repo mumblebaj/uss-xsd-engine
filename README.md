@@ -90,7 +90,7 @@ import {
 ### CDN/Browser
 
 ```HTML
-<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.1/dist/uss-xsd-engine.standalone.js"></script>
+<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.2/dist/uss-xsd-engine.standalone.js"></script>
 
 <script>
   const result = UssXsdEngine.getSchemaDiagnostics({ xsdText });

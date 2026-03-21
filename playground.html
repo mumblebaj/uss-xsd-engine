@@ -212,14 +212,14 @@
         </div>
       </div>
     </div>
-
-    <script type="module">
-      import {
+    <script src="./dist/uss-xsd-engine.standalone.js"></script>
+    <script>
+      const {
         getSchemaDiagnostics,
         extractSchemaTree,
         generateSampleXml,
-        validateXml,
-      } from "./src/index.js";
+        validateXml
+      } = window.UssXsdEngine;
 
       const EXTERNAL_DOCUMENTS = {
   "common.xsd": `<?xml version="1.0" encoding="UTF-8"?>

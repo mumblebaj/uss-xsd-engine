@@ -3,10 +3,12 @@
   "version": "0.1.0-alpha.1",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
-  "main": "./src/index.js",
-  "module": "./src/index.js",
+  "main": "dist/uss-xsd-engine.esm.js",
+  "module": "dist/uss-xsd-engine.esm.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "import": "./dist/uss-xsd-engine.esm.js"
+    }
   },
   "files": [
     "src",
@@ -14,8 +16,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "echo \"No automated test runner configured yet\"",
-    "check": "echo \"No check script configured yet\""
+    "build": "node scripts/build.mjs"
   },
   "keywords": [
     "xsd",
@@ -28,5 +29,8 @@
     "diagnostics"
   ],
   "author": "Bernard Mumble",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.27.4"
+  }
 }

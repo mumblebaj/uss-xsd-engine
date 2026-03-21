@@ -1,71 +1,106 @@
 # uss-xsd-engine
 
-Browser-first XSD engine for parsing, diagnostics, schema tree extraction, sample XML generation, and XML validation.
+Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.
 
-## Goal
+---
 
-`uss-xsd-engine` is being built as a standalone engine that can eventually be shipped as:
+## 🚀 Overview
 
-- a browser/CDN bundle
+`uss-xsd-engine` is a standalone JavaScript engine designed to process XML Schema (XSD) directly in the browser.
+
+It is built to power tools like USS XSD Studio while remaining lightweight, dependency-free, and reusable as:
+
+- a browser/CDN script
 - an npm package
+- an embedded validation/generation engine
 
-The engine is intended to power USS XSD Studio and other browser-based XML/XSD tooling without pushing heavy schema logic into the host application.
+---
 
-## Current status
+## ✨ Features
 
-This project is in active development.
+### ✅ Schema Processing
+- Parse XSD into a structured internal model
+- Namespace-aware schema resolution
+- Support for global elements, types, groups, and attribute groups
 
-Current implemented capabilities:
+### ✅ Schema Diagnostics
+- Unknown types and references detection
+- Missing base types
+- Restriction validation (subset + occurrence narrowing)
+- Facet validation (including pattern support for date/time)
+- Default/fixed conflict detection
+- Include/import diagnostics
 
-- Parse XSD into an internal schema model
-- Run schema diagnostics
-- Extract a semantic schema tree
-- Generate sample XML from XSD
-- Validate XML against XSD
-- First-pass namespace and prefix handling
-- First-pass facet validation and sample generation support
+### ✅ Schema Tree Extraction
+- Semantic tree representation of XSD
+- Expandable references and structure traversal
+- Useful for UI rendering and schema exploration
 
-## Current public API
+### ✅ Sample XML Generation
+- Minimal (mandatory-only) mode
+- Full traversal (limited expansion)
+- Namespace-aware output (`xmlns`, prefixes)
+- Supports:
+  - sequences
+  - choices (first-branch strategy)
+  - extensions
+  - restrictions (first-pass)
+- Honors:
+  - `fixed` values
+  - `default` values
 
-```js
+### ✅ XML Validation
+- Validate XML against XSD structure
+- Namespace-aware validation
+- Content model validation:
+  - sequence
+  - choice
+  - all
+- Mixed content enforcement
+- Attribute validation
+- Facet validation (pattern, length, numeric, etc.)
+- Restriction enforcement (runtime)
+- Fixed value enforcement
+
+### ✅ Include / Import (Groundwork)
+- Recognizes `xs:include` and `xs:import`
+- Supports caller-provided external schemas
+- Merges external schema definitions into runtime model
+- Emits warnings when referenced schemas are not provided
+
+---
+
+## 📦 Installation
+
+### npm
+
+```bash
+npm install uss-xsd-engine
+```
+
+```JavaScript
 import {
   getSchemaDiagnostics,
   extractSchemaTree,
   generateSampleXml,
   validateXml
-} from "./src/index.js";
+} from "uss-xsd-engine";
 ```
 
-`getSchemaDiagnostics({ xsdText, options? })`
+### CDN/Browser
 
-Returns schema issues, roots, supported features, unsupported features, and schema statistics.
+```HTML
+<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.1/dist/uss-xsd-engine.standalone.js"></script>
 
-`extractSchemaTree({ xsdText, options? })`
+<script>
+  const result = UssXsdEngine.getSchemaDiagnostics({ xsdText });
+</script>
+```
 
-Returns a semantic tree representation of the schema.
+### Public API
+All endpoints follow a consistant result format:
 
-`generateSampleXml({ xsdText, options? })`
-
-Generates example XML from the schema.
-
-`validateXml({ xsdText, xmlText, options? })`
-
-Validates XML against the schema and returns structured issues.
-
-## Design principles
-
-- Browser-first
-- Dependency-light
-- USS-friendly
-- Shared semantic core
-- Stable result and issue contracts
-- Incremental implementation without drifting
-
-### Result contract
-
-All public endpoints return the same top-level shape:
-
-```js
+```JavaScript
 {
   ok: boolean,
   data: any,
@@ -78,79 +113,171 @@ All public endpoints return the same top-level shape:
 }
 ```
 
-### Issue contract
+---
 
-```js
-{
-  code: string,
-  severity: "error" | "warning" | "info",
-  message: string,
-  line: number | null,
-  column: number | null,
-  path: string | null,
-  source: "xsd" | "xml" | "engine",
-  nodeKind: string | null,
-  name: string | null,
-  details: Record<string, any>
-}
+`getSchemaDiagnostics({ xsdText, options? })`
+Analyze schema and return:
+
+- issues (errors/warnings)
+- roots
+- supported/unsupported features
+- schema statistics
+
+---
+
+`extractSchemaTree({ xsdText, options? })`
+Returns a structured tree respresentation of the schema
+
+---
+
+`generateSampleXml({ xsdText, options? })`
+
+Generates example XML from XSD.
+
+- Options:
+- `mode`:  `"minimal"` (default) or `"full"`
+- `targetPrefix`: namespace prefix (default `"tns"`)
+- `includeOptionalAttributes`: boolean
+- `externalDocuments`: map of schemaLocation → XSD text
+
+---
+
+`validateXml({ xsdText, xmlText, options? })`
+
+Validates XML against schema.
+
+Options:
+- `rootElementName`
+- `externalDocuments`
+
+---
+
+### 📚 External Schema Support
+
+You can provide external schemas manually:
+
+```JavaScript
+const externalDocuments = {
+  "common.xsd": "...",
+  "common-import.xsd": "..."
+};
+
+validateXml({
+  xsdText,
+  xmlText,
+  options: {
+    externalDocuments
+  }
+});
 ```
-### Playground
-The repository includes `playground.html` for manual testing and iterative feature development.
 
-Use it to test:
+---
 
-- schema diagnostics
-- schema tree extraction
-- sample XML generation
-- XML validation
-- namespace handling
-- facet validation
+## ⚠️ Supported vs Not Fully Supported
+### ✅ Supported (v0.1.x)
+- Most common XSD structures
+- Namespace-aware resolution
+- Extensions (`xs:extension`)
+- Restrictions (subset + occurrence checks)
+- Facet validation (including pattern)
+- Default / fixed semantics
+- Include/import (manual provision)
+- Sample XML generation (practical coverage)
+- XML validation (core structure + facets)
 
-### Project structure
+---
+
+## ⚠️ Partially Supported / In Progress
+- Deep sample XML expansion (choice branching, recursion depth)
+- Full restriction theorem validation (advanced edge cases)
+- Namespace preservation strategies in generation
+- Advanced wildcard (`xs:any`, `xs:anyAttribute`)
+- Attribute namespace qualification
+- Recursive include/import graph resolution
+
+---
+
+## ❌ Not Supported Yet
+- Identity constraints (`xs:key`, `xs:keyref`, `xs:unique`)
+- Automatic network fetching of schemas
+- Full W3C spec conformance (edge-case completeness)
+- Streaming validation for very large XML
+- Chameleon includes
+
+---
+
+## 🧪 Playground
+
+The repository includes `playground.html` for:
+
+- testing schemas
+- validating XML
+- generating sample XML
+- debugging diagnostics
+
+The playground uses the built bundle to simulate real-world usage.
+
+---
+
+## 🧱 Architecture
 
 ```ruby
 src/
   api/
-  diagnostics/
-  generator/
-  model/
   parser/
+  model/
   resolver/
-  tree/
-  utils/
   validation/
+  generator/
+  tree/
+  diagnostics/
+  utils/
   ```
+  Design principles:
+  - browser-first
+  - dependency-light
+  - layered architecture
+  - shared semantic model across all features
 
-  ## Roadmap
+  ---
 
-  ### Completed foundations
-  - Schema diagnostics
-  - Tree extraction
-  - Sample XML generation
-  - XML validation
-  - Namespace-aware core resolution
-  - Facet validation pass 2
+  ## 🛣️ Roadmap
+### Near-term
+- Recursive include/import resolution
+- Improved sample XML depth traversal
+- Restriction enforcement (advanced cases)
+- Better namespace output strategies
 
-  ## Next candidates
+### Mid-term
+- Identity constraints (key/keyref)
+- Advanced wildcard handling
+- Performance optimizations
 
-  - XML validation depth pass 2
-  - Mixed content support
-  - Restriction inheritance improvements
-  - Better choice/all edge cases
-  - Namespace-aware sample XML output
-  - Import/include support
-  - Browser standalone bundle for CND release
+### Long-term
+- Full XSD spec coverage
+- Streaming validation
+- USS Pro / hosted engine capabilities
 
-  ## Development notes
-  This project is intentionally being built milestone by milestone:
-  1. define endpoint
-  2. implement end-to-end
-  3. stabilize
-  4. move to next endpoint
+---
 
-  This keeps the engine practicle and prevents architectural drift.
+## 📌 Versioning
 
-  ## License
+This project follows incremental feature delivery:
 
-  ### MIT
-  
+`0.1.x` → foundational engine (current phase)
+`0.2.x` → expanded spec coverage
+`1.0.0` → stable production-ready engine
+
+---
+
+## 🤝 Contributing
+
+This project is currently evolving rapidly. Contributions and feedback are welcome.
+
+---
+
+## 📄 License
+
+MIT
+
+---

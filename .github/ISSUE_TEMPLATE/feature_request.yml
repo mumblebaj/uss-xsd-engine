@@ -1,0 +1,66 @@
+name: "💡 Feature request"
+description: Suggest an improvement or new capability
+title: "[FEATURE] "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature!
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🚀 Feature description
+      description: What would you like to see?
+      placeholder: Describe the feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: usecase
+    attributes:
+      label: 🎯 Use case
+      description: Why is this needed?
+      placeholder: |
+        Example:
+        - ISO20022 schema support
+        - deeper sample XML
+        - validation edge case
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 🧠 Proposed solution
+      description: How should it work?
+      placeholder: Describe your idea
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternatives considered
+      description: Any other approaches?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 📦 Area
+      options:
+        - Schema parsing
+        - Diagnostics
+        - Tree extraction
+        - Sample XML generation
+        - XML validation
+        - Namespace handling
+        - Include / import
+        - Performance
+        - Documentation
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Additional context
+      placeholder: Anything else relevant

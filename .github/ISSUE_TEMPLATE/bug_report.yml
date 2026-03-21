@@ -1,0 +1,102 @@
+name: "🐛 Bug report"
+description: Report a problem with the XSD engine
+title: "[BUG] "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please provide as much detail as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🧩 Description
+      description: Describe the issue clearly and concisely
+      placeholder: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: xsd
+    attributes:
+      label: 📄 XSD
+      description: Paste the XSD used
+      render: xml
+      placeholder: |
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+          ...
+        </xs:schema>
+
+  - type: textarea
+    id: xml
+    attributes:
+      label: 📄 XML (if applicable)
+      description: Paste the XML instance
+      render: xml
+      placeholder: |
+        <root>...</root>
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: ⚙️ Steps to reproduce
+      placeholder: |
+        1. Load schema
+        2. Click validate
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: ✅ Expected behavior
+      placeholder: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: ❌ Actual behavior
+      placeholder: What actually happens?
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: 📊 Engine output
+      description: Paste diagnostics or validation output
+      render: json
+
+  - type: input
+    id: version
+    attributes:
+      label: 📦 Engine version
+      placeholder: e.g. 0.1.0-beta.1
+
+  - type: dropdown
+    id: usage
+    attributes:
+      label: 🌐 Usage
+      options:
+        - CDN
+        - npm
+        - Local build
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 🖥 Environment
+      placeholder: Browser / Node version
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Additional context
+      placeholder: Anything else that might help

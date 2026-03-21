@@ -104,11 +104,25 @@ function checkPattern(simpleType, issues, ctx) {
 function allowedFacetMap() {
   return {
     string: ["length", "minLength", "maxLength", "pattern", "enumeration"],
-    decimal: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "totalDigits", "fractionDigits", "enumeration"],
-    integer: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "totalDigits", "enumeration"],
-    boolean: ["enumeration"],
-    date: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"],
-    dateTime: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"]
+    normalizedString: ["length", "minLength", "maxLength", "pattern", "enumeration"],
+    token: ["length", "minLength", "maxLength", "pattern", "enumeration"],
+    anyURI: ["length", "minLength", "maxLength", "pattern", "enumeration"],
+    QName: ["length", "minLength", "maxLength", "pattern", "enumeration"],
+
+    decimal: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "totalDigits", "fractionDigits", "pattern", "enumeration"],
+    integer: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "totalDigits", "pattern", "enumeration"],
+
+    boolean: ["pattern", "enumeration"],
+
+    date: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    dateTime: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    time: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+
+    gYear: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    gYearMonth: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    gMonth: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    gMonthDay: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"],
+    gDay: ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "pattern", "enumeration"]
   };
 }
 

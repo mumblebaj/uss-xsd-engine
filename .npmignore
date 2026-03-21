@@ -1,0 +1,7 @@
+src/
+tests/
+playground.html
+.github/
+scripts/
+*.tgz
+dist/*.map

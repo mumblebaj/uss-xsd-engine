@@ -4,9 +4,16 @@ import {
   resolveElementType,
   resolveGlobalElement,
   resolveGroup,
-  stripNamespacePrefix
+  stripNamespacePrefix,
 } from "../resolver/schemaResolvers.js";
 import { createTreeNode } from "./treeNodeBuilders.js";
+
+function buildQualifiedLabel(name, namespaceUri) {
+  if (!name) return name;
+
+  // Keep it simple for now (no prefix mapping yet)
+  return namespaceUri ? `{${namespaceUri}} ${name}` : name;
+}
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -42,8 +49,8 @@ function buildSimpleTypeChildren(schema, simpleTypeDecl) {
         line: simpleTypeDecl.line,
         column: simpleTypeDecl.column,
         path: simpleTypeDecl.path,
-        children: []
-      })
+        children: [],
+      }),
     );
   }
 
@@ -55,18 +62,22 @@ function buildSimpleTypeChildren(schema, simpleTypeDecl) {
         label: "enumerations",
         line: simpleTypeDecl.line,
         column: simpleTypeDecl.column,
-        path: simpleTypeDecl.path ? `${simpleTypeDecl.path}/enumerations` : null,
+        path: simpleTypeDecl.path
+          ? `${simpleTypeDecl.path}/enumerations`
+          : null,
         children: enumerations.map((value, index) =>
           createTreeNode({
             kind: "enumeration",
             label: String(value),
             line: simpleTypeDecl.line,
             column: simpleTypeDecl.column,
-            path: simpleTypeDecl.path ? `${simpleTypeDecl.path}/enumeration[${index + 1}]` : null,
-            children: []
-          })
-        )
-      })
+            path: simpleTypeDecl.path
+              ? `${simpleTypeDecl.path}/enumeration[${index + 1}]`
+              : null,
+            children: [],
+          }),
+        ),
+      }),
     );
   }
 
@@ -77,14 +88,18 @@ function buildAttributeNode(schema, attributeDecl, state) {
   const node = createTreeNode({
     kind: "attribute",
     name: attributeDecl.name,
-    label: buildAttributeLabel(attributeDecl),
+    namespaceUri: attributeDecl.namespaceUri, // ✅ NEW
+    label: buildQualifiedLabel(
+      buildAttributeLabel(attributeDecl),
+      attributeDecl.namespaceUri,
+    ),
     typeName: attributeDecl.typeName,
     refName: attributeDecl.refName,
     use: attributeDecl.use,
     line: attributeDecl.line,
     column: attributeDecl.column,
     path: attributeDecl.path,
-    children: []
+    children: [],
   });
 
   if (attributeDecl.inlineType?.kind === "simpleType") {
@@ -97,8 +112,8 @@ function buildAttributeNode(schema, attributeDecl, state) {
         line: attributeDecl.inlineType.line,
         column: attributeDecl.inlineType.column,
         path: attributeDecl.inlineType.path,
-        children: buildSimpleTypeChildren(schema, attributeDecl.inlineType)
-      })
+        children: buildSimpleTypeChildren(schema, attributeDecl.inlineType),
+      }),
     );
   }
 
@@ -113,9 +128,10 @@ function buildAttributesNodes(schema, attributes, state) {
 
     if (attr.kind === "attribute") {
       nodes.push(buildAttributeNode(schema, attr, state));
-    }
-    else if (attr.kind === "attributeGroupRef") {
-      const target = state.expandRefs ? state.resolveAttributeGroup?.(attr.refName) : null;
+    } else if (attr.kind === "attributeGroupRef") {
+      const target = state.expandRefs
+        ? state.resolveAttributeGroup?.(attr.refName)
+        : null;
 
       const refNode = createTreeNode({
         kind: "attributeGroupRef",
@@ -124,7 +140,7 @@ function buildAttributesNodes(schema, attributes, state) {
         line: attr.line,
         column: attr.column,
         path: attr.path,
-        children: []
+        children: [],
       });
 
       if (target) {
@@ -136,8 +152,12 @@ function buildAttributesNodes(schema, attributes, state) {
             line: target.line,
             column: target.column,
             path: target.path,
-            children: buildAttributesNodes(schema, target.attributes || [], state)
-          })
+            children: buildAttributesNodes(
+              schema,
+              target.attributes || [],
+              state,
+            ),
+          }),
         );
       }
 
@@ -158,7 +178,7 @@ function buildGroupRefNode(schema, groupRefNode, state) {
     line: groupRefNode.line,
     column: groupRefNode.column,
     path: groupRefNode.path,
-    children: []
+    children: [],
   });
 
   if (!state.expandRefs) return node;
@@ -179,8 +199,10 @@ function buildGroupRefNode(schema, groupRefNode, state) {
       line: target.line,
       column: target.column,
       path: target.path,
-      children: target.content ? [buildContentNode(schema, target.content, state)] : []
-    })
+      children: target.content
+        ? [buildContentNode(schema, target.content, state)]
+        : [],
+    }),
   );
 
   state.visited.delete(visitedKey);
@@ -204,7 +226,7 @@ function buildContentNode(schema, contentNode, state) {
         path: contentNode.path,
         children: asArray(contentNode.children)
           .map((child) => buildContentNode(schema, child, state))
-          .filter(Boolean)
+          .filter(Boolean),
       });
 
     case "element":
@@ -222,7 +244,7 @@ function buildContentNode(schema, contentNode, state) {
         line: contentNode.line,
         column: contentNode.column,
         path: contentNode.path,
-        children: []
+        children: [],
       });
 
     default:
@@ -232,7 +254,7 @@ function buildContentNode(schema, contentNode, state) {
         line: contentNode.line,
         column: contentNode.column,
         path: contentNode.path,
-        children: []
+        children: [],
       });
   }
 }
@@ -243,7 +265,10 @@ function buildComplexTypeNode(schema, complexTypeDecl, state) {
 
   const children = [];
 
-  if (complexTypeDecl.derivation?.kind || complexTypeDecl.derivation?.baseTypeName) {
+  if (
+    complexTypeDecl.derivation?.kind ||
+    complexTypeDecl.derivation?.baseTypeName
+  ) {
     children.push(
       createTreeNode({
         kind: "derivation",
@@ -252,9 +277,11 @@ function buildComplexTypeNode(schema, complexTypeDecl, state) {
         derivation: complexTypeDecl.derivation.kind,
         line: complexTypeDecl.line,
         column: complexTypeDecl.column,
-        path: complexTypeDecl.path ? `${complexTypeDecl.path}/derivation` : null,
-        children: []
-      })
+        path: complexTypeDecl.path
+          ? `${complexTypeDecl.path}/derivation`
+          : null,
+        children: [],
+      }),
     );
   }
 
@@ -275,7 +302,7 @@ function buildComplexTypeNode(schema, complexTypeDecl, state) {
     line: complexTypeDecl.line,
     column: complexTypeDecl.column,
     path: complexTypeDecl.path,
-    children
+    children,
   });
 }
 
@@ -288,7 +315,7 @@ function buildSimpleTypeNode(schema, simpleTypeDecl) {
     line: simpleTypeDecl.line,
     column: simpleTypeDecl.column,
     path: simpleTypeDecl.path,
-    children: buildSimpleTypeChildren(schema, simpleTypeDecl)
+    children: buildSimpleTypeChildren(schema, simpleTypeDecl),
   });
 }
 
@@ -306,7 +333,7 @@ function buildReferencedGlobalElementNode(schema, refName, state) {
       line: target.line,
       column: target.column,
       path: target.path,
-      children: []
+      children: [],
     });
   }
 
@@ -320,7 +347,11 @@ function buildElementNode(schema, elementDecl, state) {
   const node = createTreeNode({
     kind: "element",
     name: elementDecl.name,
-    label: buildElementLabel(elementDecl),
+    namespaceUri: elementDecl.namespaceUri, // ✅ NEW
+    label: buildQualifiedLabel(
+      buildElementLabel(elementDecl),
+      elementDecl.namespaceUri,
+    ),
     typeName: elementDecl.typeName,
     refName: elementDecl.refName,
     minOccurs: elementDecl.minOccurs,
@@ -328,11 +359,15 @@ function buildElementNode(schema, elementDecl, state) {
     line: elementDecl.line,
     column: elementDecl.column,
     path: elementDecl.path,
-    children: []
+    children: [],
   });
 
   if (elementDecl.refName && state.expandRefs) {
-    const targetNode = buildReferencedGlobalElementNode(schema, elementDecl.refName, state);
+    const targetNode = buildReferencedGlobalElementNode(
+      schema,
+      elementDecl.refName,
+      state,
+    );
     if (targetNode) {
       node.children.push(targetNode);
       return node;
@@ -354,8 +389,8 @@ function buildElementNode(schema, elementDecl, state) {
         line: elementDecl.line,
         column: elementDecl.column,
         path: elementDecl.path ? `${elementDecl.path}/builtinType` : null,
-        children: []
-      })
+        children: [],
+      }),
     );
     return node;
   }
@@ -366,7 +401,10 @@ function buildElementNode(schema, elementDecl, state) {
   }
 
   if (resolvedType.kind === "complexType") {
-    const typeKey = makeVisitedKey("complexType", resolvedType.name || resolvedType.path);
+    const typeKey = makeVisitedKey(
+      "complexType",
+      resolvedType.name || resolvedType.path,
+    );
     if (state.visited.has(typeKey)) {
       node.children.push(
         createTreeNode({
@@ -376,8 +414,8 @@ function buildElementNode(schema, elementDecl, state) {
           line: resolvedType.line,
           column: resolvedType.column,
           path: resolvedType.path,
-          children: []
-        })
+          children: [],
+        }),
       );
       return node;
     }
@@ -406,13 +444,13 @@ export function extractTreeFromSchema(schema, options = {}, helpers = {}) {
   const state = {
     expandRefs: options.expandRefs !== false,
     visited: new Set(),
-    resolveAttributeGroup: helpers.resolveAttributeGroup
+    resolveAttributeGroup: helpers.resolveAttributeGroup,
   };
 
   const tree = roots.map((root) => buildElementNode(schema, root, state));
 
   return {
     roots: schema.roots,
-    tree
+    tree,
   };
 }

@@ -4,12 +4,53 @@ import {
   resolveAttributeType,
   resolveElementType,
   resolveGlobalElement,
-  resolveGroup
+  resolveGroup,
 } from "../resolver/schemaResolvers.js";
 import { createSampleValueForType } from "./sampleValueFactory.js";
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function createNamespaceContext(schema, rootDecl, options) {
+  const map = new Map();
+  const reverse = new Map();
+
+  let counter = 1;
+
+  function register(ns, preferredPrefix = null) {
+    if (!ns) return null;
+    if (map.has(ns)) return map.get(ns);
+
+    let prefix = preferredPrefix;
+
+    if (!prefix) {
+      prefix =
+        ns === schema.targetNamespace
+          ? options.targetPrefix || "tns"
+          : `ns${counter++}`;
+    }
+
+    map.set(ns, prefix);
+    reverse.set(prefix, ns);
+
+    return prefix;
+  }
+
+  // register root namespace first
+  if (rootDecl.namespaceUri) {
+    register(rootDecl.namespaceUri, options.targetPrefix || "tns");
+  }
+
+  return {
+    register,
+    getPrefix(ns) {
+      return map.get(ns) || register(ns);
+    },
+    getAll() {
+      return map;
+    },
+  };
 }
 
 function repeatCount(minOccurs, maxOccurs, mode) {
@@ -19,7 +60,10 @@ function repeatCount(minOccurs, maxOccurs, mode) {
 
   if (mode === "full") {
     if (typeof maxOccurs === "number") {
-      return Math.max(typeof minOccurs === "number" ? minOccurs : 1, Math.min(maxOccurs, 2));
+      return Math.max(
+        typeof minOccurs === "number" ? minOccurs : 1,
+        Math.min(maxOccurs, 2),
+      );
     }
     return Math.max(typeof minOccurs === "number" ? minOccurs : 1, 1);
   }
@@ -37,28 +81,26 @@ function mergeAttributes(target, source) {
   Object.assign(target, source);
 }
 
-function shouldQualifyElement(schema, elementDecl, isRoot = false) {
-  if (isRoot) return !!elementDecl.namespaceUri;
-  return schema.elementFormDefault === "qualified" && !!elementDecl.namespaceUri;
-}
-
 function qualifiedElementName(schema, elementDecl, state, isRoot = false) {
   const localName = elementDecl.name || elementDecl.refName || "element";
-
-  if (!shouldQualifyElement(schema, elementDecl, isRoot)) {
-    return localName.includes(":") ? localName.split(":")[1] : localName;
-  }
-
-  const prefix = state.targetPrefix || "tns";
   const bare = localName.includes(":") ? localName.split(":")[1] : localName;
-  return `${prefix}:${bare}`;
+
+  const ns = elementDecl.namespaceUri;
+
+  if (!ns) return bare;
+
+  const prefix = state.nsContext.getPrefix(ns);
+
+  return prefix ? `${prefix}:${bare}` : bare;
 }
 
 function buildRootNamespaceAttributes(schema, rootDecl, state) {
   const attrs = {};
 
-  if (rootDecl.namespaceUri) {
-    attrs[`xmlns:${state.targetPrefix}`] = rootDecl.namespaceUri;
+  const nsMap = state.nsContext.getAll();
+
+  for (const [ns, prefix] of nsMap.entries()) {
+    attrs[`xmlns:${prefix}`] = ns;
   }
 
   return attrs;
@@ -71,7 +113,8 @@ function buildAttributesObject(schema, attributes, options, state) {
     if (!attr) continue;
 
     if (attr.kind === "attribute") {
-      if (attr.use !== "required" && !options.includeOptionalAttributes) continue;
+      if (attr.use !== "required" && !options.includeOptionalAttributes)
+        continue;
 
       const attrName = attr.name || attr.refName || "attr";
       const resolvedType = resolveAttributeType(schema, attr);
@@ -80,13 +123,12 @@ function buildAttributesObject(schema, attributes, options, state) {
         attr.fixedValue ??
         attr.defaultValue ??
         createSampleValueForType(schema, resolvedType);
-    }
-    else if (attr.kind === "attributeGroupRef") {
+    } else if (attr.kind === "attributeGroupRef") {
       const group = state.resolveAttributeGroup?.(attr.refName);
       if (!group) continue;
       mergeAttributes(
         out,
-        buildAttributesObject(schema, group.attributes || [], options, state)
+        buildAttributesObject(schema, group.attributes || [], options, state),
       );
     }
   }
@@ -108,7 +150,10 @@ function buildNodesFromContent(schema, contentNode, options, state) {
     }
 
     case "choice": {
-      const selected = pickChoiceChildren(asArray(contentNode.children), options.mode);
+      const selected = pickChoiceChildren(
+        asArray(contentNode.children),
+        options.mode,
+      );
       const result = [];
       for (const child of selected) {
         result.push(...buildNodesFromContent(schema, child, options, state));
@@ -127,7 +172,14 @@ function buildNodesFromContent(schema, contentNode, options, state) {
 
     case "any":
       return options.mode === "full"
-        ? [{ name: "anyElement", attributes: {}, children: [], text: "example" }]
+        ? [
+            {
+              name: "anyElement",
+              attributes: {},
+              children: [],
+              text: "example",
+            },
+          ]
         : [];
 
     default:
@@ -141,7 +193,9 @@ function buildComplexTypeContent(schema, complexTypeDecl, options, state) {
 
   return {
     attributes: buildAttributesObject(schema, attributes, options, state),
-    children: content ? buildNodesFromContent(schema, content, options, state) : []
+    children: content
+      ? buildNodesFromContent(schema, content, options, state)
+      : [],
   };
 }
 
@@ -154,12 +208,17 @@ function buildElementNode(schema, elementDecl, options, state, isRoot = false) {
 
   const node = {
     name: qualifiedElementName(schema, elementDecl, state, isRoot),
-    attributes: isRoot ? buildRootNamespaceAttributes(schema, elementDecl, state) : {},
+    attributes: isRoot
+      ? buildRootNamespaceAttributes(schema, elementDecl, state)
+      : {},
     children: [],
-    text: null
+    text: null,
   };
 
-  if (resolvedType?.kind === "builtinType" || resolvedType?.kind === "simpleType") {
+  if (
+    resolvedType?.kind === "builtinType" ||
+    resolvedType?.kind === "simpleType"
+  ) {
     node.text =
       elementDecl.fixedValue ??
       elementDecl.defaultValue ??
@@ -171,7 +230,7 @@ function buildElementNode(schema, elementDecl, options, state, isRoot = false) {
     const built = buildComplexTypeContent(schema, resolvedType, options, state);
     node.attributes = {
       ...node.attributes,
-      ...built.attributes
+      ...built.attributes,
     };
     node.children = built.children;
     return node;
@@ -189,24 +248,36 @@ function buildElementNode(schema, elementDecl, options, state, isRoot = false) {
   return node;
 }
 
-function buildElementInstances(schema, elementDecl, options, state, isRoot = false) {
+function buildElementInstances(
+  schema,
+  elementDecl,
+  options,
+  state,
+  isRoot = false,
+) {
   if (elementDecl.refName) {
     const target = resolveGlobalElement(schema, elementDecl.refName);
     if (target) {
       const mergedDecl = {
         ...target,
         minOccurs: elementDecl.minOccurs,
-        maxOccurs: elementDecl.maxOccurs
+        maxOccurs: elementDecl.maxOccurs,
       };
       return buildElementInstances(schema, mergedDecl, options, state, isRoot);
     }
   }
 
-  const count = repeatCount(elementDecl.minOccurs, elementDecl.maxOccurs, options.mode);
+  const count = repeatCount(
+    elementDecl.minOccurs,
+    elementDecl.maxOccurs,
+    options.mode,
+  );
   const result = [];
 
   for (let i = 0; i < count; i += 1) {
-    result.push(buildElementNode(schema, elementDecl, options, state, isRoot && i === 0));
+    result.push(
+      buildElementNode(schema, elementDecl, options, state, isRoot && i === 0),
+    );
   }
 
   return result;
@@ -223,26 +294,35 @@ function selectRoot(schema, options = {}) {
 export function generateXmlFromSchema(schema, options = {}, helpers = {}) {
   const normalizedOptions = {
     mode: options.mode === "full" ? "full" : "minimal",
-    includeOptionalAttributes: options.includeOptionalAttributes === true
+    includeOptionalAttributes: options.includeOptionalAttributes === true,
   };
 
   const root = selectRoot(schema, options);
   if (!root) {
     return {
       rootElementName: null,
-      rootNode: null
+      rootNode: null,
     };
   }
 
+  const nsContext = createNamespaceContext(schema, root, options);
+
   const state = {
     resolveAttributeGroup: helpers.resolveAttributeGroup,
-    targetPrefix: options.targetPrefix || "tns"
+    targetPrefix: options.targetPrefix || "tns",
+    nsContext,
   };
 
-  const [rootNode] = buildElementInstances(schema, root, normalizedOptions, state, true);
+  const [rootNode] = buildElementInstances(
+    schema,
+    root,
+    normalizedOptions,
+    state,
+    true,
+  );
 
   return {
     rootElementName: root.name,
-    rootNode
+    rootNode,
   };
 }

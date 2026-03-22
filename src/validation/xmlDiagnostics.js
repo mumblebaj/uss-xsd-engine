@@ -17,8 +17,8 @@ export function makeDiagnostic(source, severity, message, line = 1, column = 1) 
     source,
     severity,
     message,
-    line,
-    column
+    line: Number.isFinite(line) && line > 0 ? line : 1,
+    column: Number.isFinite(column) && column > 0 ? column : 1
   };
 }
 
@@ -61,13 +61,17 @@ export function parseXmlWithDiagnostics(text, source = "xml", options = {}) {
 
   const parserError = document.querySelector?.("parsererror");
   if (parserError) {
+    const rawMessage = parserError.textContent || parserError.innerText || "";
+    const normalizedMessage = normalizeParserErrorMessage(rawMessage);
+    const { line, column } = extractLineColumn(rawMessage) || extractLineColumn(normalizedMessage);
+
     diagnostics.push(
       makeDiagnostic(
         source,
         "error",
-        normalizeParserErrorMessage(parserError.textContent),
-        1,
-        1
+        normalizedMessage || "XML parsing failed.",
+        line,
+        column
       )
     );
 
@@ -84,6 +88,33 @@ export function parseXmlWithDiagnostics(text, source = "xml", options = {}) {
 }
 
 function normalizeParserErrorMessage(message) {
-  const text = String(message || "").trim();
-  return text || "XML parsing failed.";
+  return String(message || "")
+    .replace(/\r?\n/g, " ")
+    .replace(/^This page contains the following errors:\s*/i, "")
+    .replace(/Below is a rendering of the page up to the first error\.\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractLineColumn(message) {
+  const text = String(message || "");
+
+  const patterns = [
+    /line\s+(\d+)\s+at\s+column\s+(\d+)/i,
+    /at\s+line\s+(\d+)\s+column\s+(\d+)/i,
+    /Line Number\s+(\d+),\s*Column\s+(\d+)/i,
+    /line\s+(\d+),\s*column\s+(\d+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return {
+        line: parseInt(match[1], 10) || 1,
+        column: parseInt(match[2], 10) || 1
+      };
+    }
+  }
+
+  return { line: 1, column: 1 };
 }

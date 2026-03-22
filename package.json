@@ -1,13 +1,17 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "dist/uss-xsd-engine.esm.js",
   "module": "dist/uss-xsd-engine.esm.js",
+  "browser": "dist/uss-xsd-engine.standalone.js",
+  "unpkg": "dist/uss-xsd-engine.standalone.js",
+  "jsdelivr": "dist/uss-xsd-engine.standalone.js",
   "exports": {
     ".": {
-      "import": "./dist/uss-xsd-engine.esm.js"
+      "import": "./dist/uss-xsd-engine.esm.js",
+      "default": "./dist/uss-xsd-engine.esm.js"
     }
   },
   "files": [
@@ -16,16 +20,41 @@
     "LICENSE",
     "!dist/*.map"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mumblebaj/uss-xsd-engine"
+  },
+  "sideEffects": false,
+  "homepage": "https://github.com/mumblebaj/uss-xsd-engine",
+  "bugs": {
+    "url": "https://github.com/mumblebaj/uss-xsd-engine/issues"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "clean": "rm -rf dist",
+    "check:git": "git diff --quiet && git diff --cached --quiet",
+    "version:beta": "npm version prerelease --preid=beta",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
+    "release:beta": "bash ./scripts/release-beta.sh",
+    "release:patch": "bash ./scripts/release-stable.sh patch",
+    "release:minor": "bash ./scripts/release-stable.sh minor",
+    "release:major": "bash ./scripts/release-stable.sh major",
+    "publish:beta:retag-latest": "bash ./scripts/promote-beta-to-latest.sh"
   },
   "keywords": [
     "xsd",
     "xml",
     "schema",
+    "xsd-parser",
+    "xml-validator",
     "xml-schema",
     "browser",
     "validation",
+    "namespacce",
+    "aponapi",
+    "uss",
     "generator",
     "diagnostics"
   ],
@@ -33,5 +62,8 @@
   "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.27.4"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

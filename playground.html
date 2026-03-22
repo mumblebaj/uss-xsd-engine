@@ -1452,6 +1452,46 @@
   <xs:import namespace="urn:common" schemaLocation="common-import.xsd"/>
   <xs:element name="person" type="cmn:CommonPersonType"/>
 </xs:schema>`
+},
+{
+  id: "xsd-namespace-qualified",
+  label: "72. Target namespace + qualified",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://example.com/schema"
+  xmlns:tns="http://example.com/schema"
+  elementFormDefault="qualified">
+
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`
+},
+{
+  id: "xsd-target-namespace-unqualified",
+  label: "73. Target namespace  + unqualified",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://example.com/schema"
+  xmlns:tns="http://example.com/schema"
+  elementFormDefault="unqualified">
+
+  <xs:element name="note">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="to" type="xs:string"/>
+        <xs:element name="from" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`
 }
       ];
 

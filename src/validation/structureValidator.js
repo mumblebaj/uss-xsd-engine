@@ -2,7 +2,6 @@ import {
   getEffectiveAttributes,
   getEffectiveContent,
   resolveElementType,
-  resolveGlobalElement,
   resolveGroup
 } from "../resolver/schemaResolvers.js";
 
@@ -52,6 +51,59 @@ function buildXmlPath(pathParts) {
   return "/" + pathParts.join("/");
 }
 
+function getLocationFields(context, node = null, fallbackNode = null) {
+  const location =
+    context.getNodeLocation?.(node) ||
+    context.getNodeLocation?.(fallbackNode) ||
+    context.getNodeLocation?.(context.currentXmlNode) ||
+    null;
+
+  return {
+    line: location?.line ?? null,
+    column: location?.column ?? null
+  };
+}
+
+function getAttributeLocationFields(context, node, attrName) {
+  const location =
+    context.getAttributeLocation?.(node, attrName) ||
+    context.getNodeLocation?.(node) ||
+    context.getNodeLocation?.(context.currentXmlNode) ||
+    null;
+
+  return {
+    line: location?.line ?? null,
+    column: location?.column ?? null
+  };
+}
+
+function getAttributeValueLocationFields(context, node, attrName) {
+  const location =
+    context.getAttributeValueLocation?.(node, attrName) ||
+    context.getAttributeLocation?.(node, attrName) ||
+    context.getNodeLocation?.(node) ||
+    context.getNodeLocation?.(context.currentXmlNode) ||
+    null;
+
+  return {
+    line: location?.line ?? null,
+    column: location?.column ?? null
+  };
+}
+
+function getTextValueLocationFields(context, node) {
+  const location =
+    context.getTextValueLocation?.(node) ||
+    context.getNodeLocation?.(node) ||
+    context.getNodeLocation?.(context.currentXmlNode) ||
+    null;
+
+  return {
+    line: location?.line ?? null,
+    column: location?.column ?? null
+  };
+}
+
 export function validateAttributes(xmlNode, attributes, context) {
   const { schema, createIssue, ISSUE_CODES, issues, pathParts, validateAttributeValue } = context;
   const allowed = new Map();
@@ -82,6 +134,7 @@ export function validateAttributes(xmlNode, attributes, context) {
           code: ISSUE_CODES.XML_MISSING_REQUIRED_ATTRIBUTE,
           severity: "error",
           message: `Required attribute '${attrName}' is missing.`,
+          ...getAttributeLocationFields(context, xmlNode, attrName),
           path: buildXmlPath(pathParts),
           source: "xml",
           nodeKind: "attribute",
@@ -100,6 +153,7 @@ export function validateAttributes(xmlNode, attributes, context) {
             code: ISSUE_CODES[valueResult.code] || valueResult.code,
             severity: "error",
             message: valueResult.message,
+            ...getAttributeValueLocationFields(context, xmlNode, attrName),
             path: buildXmlPath(pathParts),
             source: "xml",
             nodeKind: "attribute",
@@ -112,7 +166,6 @@ export function validateAttributes(xmlNode, attributes, context) {
   }
 
   for (const attr of Array.from(xmlNode.attributes || [])) {
-    // Ignore namespace declarations
     if (
       attr.name === "xmlns" ||
       attr.name.startsWith("xmlns:") ||
@@ -127,6 +180,7 @@ export function validateAttributes(xmlNode, attributes, context) {
           code: ISSUE_CODES.XML_UNEXPECTED_ATTRIBUTE,
           severity: "error",
           message: `Unexpected attribute '${attr.name}'.`,
+          ...getAttributeLocationFields(context, xmlNode, attr.name),
           path: buildXmlPath(pathParts),
           source: "xml",
           nodeKind: "attribute",
@@ -149,6 +203,7 @@ function validateSimpleElement(xmlNode, elementDecl, context) {
         code: ISSUE_CODES[valueResult.code] || valueResult.code,
         severity: "error",
         message: valueResult.message,
+        ...getTextValueLocationFields(context, xmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "element",
@@ -169,6 +224,7 @@ function validateMixedContent(xmlNode, complexTypeDecl, context, pathParts) {
         code: ISSUE_CODES.XML_MIXED_CONTENT_NOT_ALLOWED,
         severity: "error",
         message: "Mixed text content is not allowed for this complex type.",
+        ...getTextValueLocationFields(context, xmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "element",
@@ -197,6 +253,7 @@ function validateComplexElement(xmlNode, complexTypeDecl, context) {
         code: ISSUE_CODES.XML_INVALID_TEXT_FOR_COMPLEX_TYPE,
         severity: "error",
         message: "Complex element contains text where structured child content is expected.",
+        ...getTextValueLocationFields(context, xmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "element",
@@ -210,15 +267,19 @@ function validateComplexElement(xmlNode, complexTypeDecl, context) {
     const result = validateContentModel(children, content, context, pathParts);
     if (result.nextIndex < children.length) {
       for (let i = result.nextIndex; i < children.length; i += 1) {
+        const childNode = children[i];
+        const childName = localName(childNode);
+
         issues.push(
           createIssue({
             code: ISSUE_CODES.XML_UNEXPECTED_ELEMENT,
             severity: "error",
-            message: `Unexpected element '${localName(children[i])}'.`,
-            path: buildXmlPath([...pathParts, localName(children[i])]),
+            message: `Unexpected element '${childName}'.`,
+            ...getLocationFields(context, childNode, xmlNode),
+            path: buildXmlPath([...pathParts, childName]),
             source: "xml",
             nodeKind: "element",
-            name: localName(children[i]),
+            name: childName,
             details: {}
           })
         );
@@ -234,7 +295,8 @@ function validateElementDecl(xmlNode, elementDecl, context, pathParts) {
 
   const nextContext = {
     ...context,
-    pathParts
+    pathParts,
+    currentXmlNode: xmlNode
   };
 
   if (resolvedType.kind === "builtinType" || resolvedType.kind === "simpleType") {
@@ -271,6 +333,7 @@ function consumeMatchingElement(children, startIndex, elementDecl, context, path
         code: context.ISSUE_CODES.XML_MISSING_REQUIRED_ELEMENT,
         severity: "error",
         message: `Required element '${elementDecl.name || elementDecl.refName}' is missing.`,
+        ...getLocationFields(context, context.currentXmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "element",
@@ -311,6 +374,7 @@ function validateGroupRef(children, startIndex, groupRefNode, context, pathParts
         code: context.ISSUE_CODES.XML_MISSING_REQUIRED_ELEMENT,
         severity: "error",
         message: `Required group '${groupRefNode.refName}' is missing.`,
+        ...getLocationFields(context, context.currentXmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "groupRef",
@@ -340,7 +404,8 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
       if (result.matchedAny) {
         context.issues.length = snapshotIssuesLength;
         matchedBranches.push(result);
-      } else {
+      }
+      else {
         context.issues.length = snapshotIssuesLength;
       }
     }
@@ -353,6 +418,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
           code: context.ISSUE_CODES.XML_CHOICE_MULTIPLE_BRANCHES,
           severity: "error",
           message: "Multiple xs:choice branches appear to match at the same position.",
+          ...getLocationFields(context, context.currentXmlNode),
           path: buildXmlPath(pathParts),
           source: "xml",
           nodeKind: "choice",
@@ -373,6 +439,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
         code: context.ISSUE_CODES.XML_CHOICE_NOT_SATISFIED,
         severity: "error",
         message: "No valid branch of xs:choice was satisfied.",
+        ...getLocationFields(context, context.currentXmlNode),
         path: buildXmlPath(pathParts),
         source: "xml",
         nodeKind: "choice",
@@ -423,6 +490,7 @@ function validateAll(children, startIndex, allNode, context, pathParts, silent =
             code: context.ISSUE_CODES.XML_ALL_MISSING_REQUIRED_ELEMENT,
             severity: "error",
             message: `Required xs:all child '${member.name || member.refName}' is missing.`,
+            ...getLocationFields(context, context.currentXmlNode),
             path: buildXmlPath(pathParts),
             source: "xml",
             nodeKind: "all",
@@ -479,13 +547,16 @@ function validateRestrictionCompatibility(modelNode, context, pathParts, childre
   const allowedNames = flattenAllowedNames(modelNode, new Set());
 
   for (let i = startIndex; i < children.length; i += 1) {
-    const childName = localName(children[i]);
+    const childNode = children[i];
+    const childName = localName(childNode);
+
     if (!allowedNames.has(childName)) {
       context.issues.push(
         context.createIssue({
           code: context.ISSUE_CODES.XML_RESTRICTED_ELEMENT_NOT_ALLOWED,
           severity: "error",
           message: `Element '${childName}' is not allowed by the restricted content model.`,
+          ...getLocationFields(context, childNode, context.currentXmlNode),
           path: buildXmlPath([...pathParts, childName]),
           source: "xml",
           nodeKind: "element",

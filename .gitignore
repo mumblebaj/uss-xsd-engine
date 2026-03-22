@@ -6,3 +6,4 @@ coverage/
 Thumbs.db
 .vscode/
 .ideal/
+*.tgz

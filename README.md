@@ -4,6 +4,14 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 
 ---
 
+![npm](https://img.shields.io/npm/v/uss-xsd-engine)
+
+---
+
+> 📦 Latest release: See full details in [GitHub Releases](https://github.com/mumblebaj/uss-xsd-engine/releases)
+
+---
+
 ## 🚀 Overview
 
 `uss-xsd-engine` is a standalone JavaScript engine designed to process XML Schema (XSD) directly in the browser.
@@ -90,7 +98,7 @@ import {
 ### CDN/Browser
 
 ```HTML
-<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.3/dist/uss-xsd-engine.standalone.js"></script>
+<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.4/dist/uss-xsd-engine.standalone.js"></script>
 
 <script>
   const result = UssXsdEngine.getSchemaDiagnostics({ xsdText });
@@ -173,6 +181,115 @@ validateXml({
 
 ---
 
+## 🤔 Why uss-xsd-engine?
+
+Most XML/XSD libraries were designed for server-side environments, require heavy dependencies, or lack meaningful diagnostics.
+
+**uss-xsd-engine** is built differently — with a focus on modern, browser-first use cases and developer experience.
+
+---
+
+### 🌐 Browser-First by Design
+
+* Runs fully in the browser
+* No native dependencies or network fetching required
+* Perfect for tools like USS, editors, and client-side validation
+
+---
+
+### 🧭 Precise Error Diagnostics
+
+* Line/column support for both:
+
+  * XML parsing errors
+  * Schema validation errors
+* Click-to-navigate support (e.g. Monaco Editor integration)
+* Fine-grained mapping:
+
+  * elements
+  * attributes
+  * values
+
+➡️ Debug XML like you debug code
+
+---
+
+### 🌐 Namespace-Aware Everything
+
+* Proper handling of `targetNamespace`
+* Prefix-aware sample XML generation
+* Multi-schema support with correct namespace boundaries
+
+➡️ No more ambiguity in complex schema environments
+
+---
+
+### 🔁 Real Multi-Schema Support
+
+* Recursive `xs:include` and `xs:import` resolution
+* Handles deep schema graphs (A → B → C)
+* Circular-safe resolution
+
+➡️ Works with real-world schemas (not just simple examples)
+
+---
+
+### 🧩 Practical XML Generation
+
+* Generates usable sample XML
+* Respects:
+
+  * structure
+  * required elements
+  * namespaces
+* Designed for real testing, not just demos
+
+---
+
+### ⚡ Lightweight & Modular
+
+* No heavy runtime dependencies
+* Designed for CDN + npm usage
+* Easy to embed into any tool or workflow
+
+---
+
+### 🧠 Built for Tooling
+
+* Tree extraction for UI rendering
+* Structured diagnostics pipeline
+* Clean API surface for integration
+
+➡️ Not just a library — a foundation for schema tooling
+
+---
+
+## 🚀 When to Use This Engine
+
+Use **uss-xsd-engine** if you need:
+
+* In-browser XML validation against XSD
+* Schema-driven XML generation
+* Developer-friendly diagnostics
+* Multi-schema (include/import) support
+* A lightweight alternative to server-side XML tools
+
+---
+
+## ⚠️ What This Is NOT (Yet)
+
+* Full W3C spec-complete validator (edge cases still evolving)
+* Streaming validator for very large XML
+* Identity constraint (`xs:key`, etc.) enforcement
+
+➡️ The focus is **practical correctness + usability**, with continuous expansion
+
+---
+
+💡 This engine is actively evolving — built to power real tools, not just validate specs.
+
+---
+
 ## ⚠️ Supported vs Not Fully Supported
 ### ✅ Supported (v0.1.x)
 - Most common XSD structures
@@ -181,19 +298,22 @@ validateXml({
 - Restrictions (subset + occurrence checks)
 - Facet validation (including pattern)
 - Default / fixed semantics
-- Include/import (manual provision)
-- Sample XML generation (practical coverage)
-- XML validation (core structure + facets)
+- Include/import (manual provision with recursive resolution)
+- Sample XML generation (namespace-aware, multi-schema support)
+- XML validation (structure, facets, and source-mapped diagnostics)
+- XML parse diagnostics with line/column support
+- Semantic validation diagnostics with line/column support
+- Attribute and value-level source mapping
+- Namespace-aware schema tree extraction
 
 ---
 
 ## ⚠️ Partially Supported / In Progress
 - Deep sample XML expansion (choice branching, recursion depth)
 - Full restriction theorem validation (advanced edge cases)
-- Namespace preservation strategies in generation
+- Advanced Namespace handling (prefix customizatioon, default namespace strategies)
 - Advanced wildcard (`xs:any`, `xs:anyAttribute`)
 - Attribute namespace qualification
-- Recursive include/import graph resolution
 
 ---
 
@@ -202,7 +322,7 @@ validateXml({
 - Automatic network fetching of schemas
 - Full W3C spec conformance (edge-case completeness)
 - Streaming validation for very large XML
-- Chameleon includes
+- Chameleon includes (namespace adaptation)
 
 ---
 

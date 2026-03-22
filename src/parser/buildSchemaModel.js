@@ -34,23 +34,6 @@ const UNSUPPORTED_NODE_FEATURES = new Set([
   "notation",
 ]);
 
-const SUPPORTED_NODE_FEATURES = new Set([
-  "schema",
-  "element",
-  "attribute",
-  "complexType",
-  "simpleType",
-  "sequence",
-  "choice",
-  "all",
-  "complexContent",
-  "simpleContent",
-  "extension",
-  "restriction",
-  "group",
-  "attributeGroup",
-]);
-
 function elementChildren(node) {
   return Array.from(node?.children || []).filter(
     (child) => child.nodeType === 1,
@@ -1249,43 +1232,57 @@ export function buildSchemaModel(doc, options = {}) {
       details: { declarationName: decl.name },
     });
 
-  const allExternalRefs = [
-    ...(schema.externalRefs.includes || []),
-    ...(schema.externalRefs.imports || []),
-  ];
+const visited = options._visitedExternalSchemas || new Set();
 
-  for (const ref of allExternalRefs) {
-    if (!ref.schemaLocation) continue;
+const allExternalRefs = [
+  ...(schema.externalRefs.includes || []),
+  ...(schema.externalRefs.imports || []),
+];
 
-    const externalXsdText = externalDocuments[ref.schemaLocation];
-    if (!externalXsdText) continue;
+for (const ref of allExternalRefs) {
+  if (!ref.schemaLocation) continue;
 
-    const parser = new DOMParser();
-    const externalDoc = parser.parseFromString(
-      externalXsdText,
-      "application/xml",
-    );
-    const parserError = externalDoc.querySelector("parsererror");
-    if (parserError) {
-      continue;
-    }
-
-    const externalBuild = buildSchemaModel(externalDoc, {
-      ...options,
-      xsdText: externalXsdText,
-      externalDocuments: {},
-    });
-
-    if (externalBuild.schema) {
-      mergeGlobalsIntoSchema(
-        schema,
-        externalBuild.schema,
-        issues,
-        createDuplicateIssue,
-      );
-    }
-    issues.push(...(externalBuild.issues || []));
+  // prevent circular / duplicate processing
+  if (visited.has(ref.schemaLocation)) {
+    continue;
   }
+
+  const externalXsdText = externalDocuments[ref.schemaLocation];
+  if (!externalXsdText) {
+    continue;
+  }
+
+  visited.add(ref.schemaLocation);
+
+  const parser = new DOMParser();
+  const externalDoc = parser.parseFromString(
+    externalXsdText,
+    "application/xml"
+  );
+
+  const parserError = externalDoc.querySelector("parsererror");
+  if (parserError) {
+    continue;
+  }
+
+  const externalBuild = buildSchemaModel(externalDoc, {
+    ...options,
+    xsdText: externalXsdText,
+    externalDocuments, // ✅ PASS THROUGH (critical)
+    _visitedExternalSchemas: visited // ✅ recursion tracking
+  });
+
+  if (externalBuild.schema) {
+    mergeGlobalsIntoSchema(
+      schema,
+      externalBuild.schema,
+      issues,
+      createDuplicateIssue
+    );
+  }
+
+  issues.push(...(externalBuild.issues || []));
+}
 
   return { schema, issues };
 }

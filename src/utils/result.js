@@ -1,3 +1,5 @@
+import { ENGINE_VERSION } from "../version";
+
 export function summarizeIssues(issues = []) {
   return issues.reduce(
     (acc, issue) => {
@@ -19,6 +21,7 @@ export function makeResult({ data = null, issues = [] } = {}) {
     ok: !hasErrors(issues),
     data,
     issues,
-    summary: summarizeIssues(issues)
+    summary: summarizeIssues(issues),
+    version: ENGINE_VERSION
   };
 }

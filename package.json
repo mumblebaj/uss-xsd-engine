@@ -1,6 +1,6 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-rc.1",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "dist/uss-xsd-engine.esm.js",
@@ -22,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/mumblebaj/uss-xsd-engine"
+    "url": "git+https://github.com/mumblebaj/uss-xsd-engine.git"
   },
   "sideEffects": false,
   "homepage": "https://github.com/mumblebaj/uss-xsd-engine",
@@ -30,6 +30,7 @@
     "url": "https://github.com/mumblebaj/uss-xsd-engine/issues"
   },
   "scripts": {
+    "write": "node scripts/write-version.js",
     "build": "node scripts/build.mjs",
     "clean": "rm -rf dist",
     "check:git": "git diff --quiet && git diff --cached --quiet",

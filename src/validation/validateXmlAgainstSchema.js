@@ -246,6 +246,29 @@ export function validateXmlAgainstSchema(
     // Handle simpleContent text validation
     if (isSimpleContent) {
       const textValue = (xmlRoot.textContent || "").trim();
+      const children = elementChildren(xmlRoot);
+
+      if (children.length > 0) {
+        for (const childNode of children) {
+          const childName = localName(childNode);
+
+          issues.push(
+            createIssue({
+              code: ISSUE_CODES.XML_UNEXPECTED_ELEMENT,
+              severity: "error",
+              message: `Unexpected element '${childName}'.`,
+              ...toLocationFields(locator.getNodeLocation(childNode)),
+              path: `/${xmlRootName}/${childName}`,
+              source: "xml",
+              nodeKind: "element",
+              name: childName,
+              details: {
+                namespaceUri: namespaceUri(childNode),
+              },
+            }),
+          );
+        }
+      }
 
       if (!textValue) {
         issues.push(
@@ -265,11 +288,6 @@ export function validateXmlAgainstSchema(
           }),
         );
       } else {
-        const baseType = resolveType(
-          schema,
-          resolvedRootType.derivation.baseTypeName,
-        );
-
         const valueResult = validateElementValue(
           schema,
           { ...schemaRoot, typeName: resolvedRootType.derivation.baseTypeName },

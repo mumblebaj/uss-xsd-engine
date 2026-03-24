@@ -1596,6 +1596,91 @@
 
   <xs:element name="person" type="tns:CommonPersonType"/>
 </xs:schema>`
+},
+{
+  id: "xml-value-required",
+  label: "78. XML Value Required",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note" type="NoteType"/>
+
+  <xs:complexType name="NoteType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="lang" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>`,
+xml: `<note lang="en"></note>`
+},
+{
+  id: "xml-value-required",
+  label: "79. XML Value Required",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note" type="NoteType"/>
+
+  <xs:complexType name="NoteType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="lang" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>`,
+xml: `<note lang="en">   </note>`
+},
+{
+  id: "xml-value-required",
+  label: "80. XML Value Required Child Only",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note" type="NoteType"/>
+
+  <xs:complexType name="NoteType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="lang" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>`,
+xml: `<note lang="en"><child/></note>`
+},
+{
+  id: "xml-value-required",
+  label: "81. XML Value Required Child Only + Child",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note" type="NoteType"/>
+
+  <xs:complexType name="NoteType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="lang" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>`,
+xml: `<note lang="en">Hello<child/></note>`
+},
+{
+  id: "xml-value-required",
+  label: "82. XML Value Required Valid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="note" type="NoteType"/>
+
+  <xs:complexType name="NoteType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="lang" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>`,
+xml: `<note lang="en">Hello<child/></note>`
 }
       ];
 

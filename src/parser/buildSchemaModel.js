@@ -1325,7 +1325,6 @@ export function buildSchemaModel(doc, options = {}) {
 
     const shouldApplyChameleonInclude =
       ref.kind === "include" &&
-      (schema.targetNamespace || null) !== null &&
       externalDeclaredTargetNamespace === null;
 
     const externalBuild = buildSchemaModel(externalDoc, {

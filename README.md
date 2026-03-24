@@ -5,6 +5,7 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 ---
 
 ![npm](https://img.shields.io/npm/v/uss-xsd-engine)
+[![Jsdelivr](https://data.jsdelivr.com/v1/package/npm/uss-xsd-engine/badge)](https://www.jsdelivr.com/package/npm/uss-xsd-engine)
 
 ---
 
@@ -93,12 +94,19 @@ import {
   generateSampleXml,
   validateXml
 } from "uss-xsd-engine";
+
+const result = validateXml(schema, xml);
+console.log(result.issues);
 ```
 
 ### CDN/Browser
 
 ```HTML
-<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.4/dist/uss-xsd-engine.standalone.js"></script>
+<script src="https://unpkg.com/uss-xsd-engine@0.1.0-beta.5/dist/uss-xsd-engine.standalone.js"></script>
+
+or
+
+<script src="https://cdn.jsdelivr.net/npm/uss-xsd-engine@0.1.0-beta.5/dist/uss-xsd-engine.esm.min.js"></script>
 
 <script>
   const result = UssXsdEngine.getSchemaDiagnostics({ xsdText });

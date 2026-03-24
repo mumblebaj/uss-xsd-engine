@@ -239,7 +239,46 @@
       <xs:element name="name" type="xs:string"/>
     </xs:sequence>
   </xs:complexType>
+</xs:schema>`,
+
+  "included-different-ns.xsd": `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:other"
+  xmlns="urn:other"
+  elementFormDefault="qualified">
+
+  <xs:element name="otherRoot" type="xs:string"/>
+</xs:schema>`,
+
+"wrong-imported-ns.xsd": `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:not-imported"
+  xmlns="urn:not-imported"
+  elementFormDefault="qualified">
+
+  <xs:complexType name="ImportedType">
+    <xs:sequence>
+      <xs:element name="value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`,
+"ref-cross-import.xsd": `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:common">
+
+  <xs:element name="CommonElement" type="xs:string"/>
+
+</xs:schema>`,
+"common-chameleon.xsd": `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="CommonPersonType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
 </xs:schema>`
+
 };
 
       const TEST_CASES = [
@@ -1491,6 +1530,71 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
+</xs:schema>`
+},
+{
+  id: "xs:include-namespace-mismtach",
+  label: "74. xs:include namespace mismatch",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:main"
+  xmlns="urn:main"
+  elementFormDefault="qualified">
+
+  <xs:include schemaLocation="included-different-ns.xsd"/>
+
+  <xs:element name="root" type="xs:string"/>
+</xs:schema>`
+},
+{
+  id: "xs:import-declared-namespace-mismathc",
+  label: "75. xs:import declared namespace mismatch",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="urn:main"
+  xmlns:main="urn:main"
+  xmlns:imp="urn:imported"
+  elementFormDefault="qualified">
+
+  <xs:import namespace="urn:imported" schemaLocation="wrong-imported-ns.xsd"/>
+
+  <xs:element name="root" type="xs:string"/>
+</xs:schema>`
+},
+{
+  id: "ref-cross-import",
+  label: "76. Ref Cross Import",
+  xsd: `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:cmn="urn:common"
+  targetNamespace="urn:test">
+
+  <xs:import namespace="urn:common" schemaLocation="ref-cross-import.xsd"/>
+
+  <xs:element name="wrapper">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="cmn:CommonElement"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>`
+},
+{
+  id: "chameleon-test",
+  label: "77 Chameleon Include Test",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="urn:test"
+  targetNamespace="urn:test"
+  elementFormDefault="qualified">
+
+  <xs:include schemaLocation="common-chameleon.xsd"/>
+
+  <xs:element name="person" type="tns:CommonPersonType"/>
 </xs:schema>`
 }
       ];

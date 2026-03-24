@@ -104,6 +104,14 @@ function getTextValueLocationFields(context, node) {
   };
 }
 
+function isSimpleContentComplexType(complexTypeDecl) {
+  return (
+    complexTypeDecl?.kind === "complexType" &&
+    complexTypeDecl?.contentModel === "simple" &&
+    !!complexTypeDecl?.derivation?.baseTypeName
+  );
+}
+
 export function validateAttributes(xmlNode, attributes, context) {
   const { schema, createIssue, ISSUE_CODES, issues, pathParts, validateAttributeValue } = context;
   const allowed = new Map();
@@ -214,9 +222,64 @@ function validateSimpleElement(xmlNode, elementDecl, context) {
   }
 }
 
+function validateSimpleContentElement(xmlNode, complexTypeDecl, context) {
+  const { schema, createIssue, ISSUE_CODES, issues, pathParts, validateElementValue } = context;
+  const value = textContentTrimmed(xmlNode);
+  const children = elementChildren(xmlNode);
+  const baseTypeName = complexTypeDecl?.derivation?.baseTypeName;
+
+  if (children.length > 0) {
+    for (const childNode of children) {
+      const childName = localName(childNode);
+      issues.push(
+        createIssue({
+          code: ISSUE_CODES.XML_UNEXPECTED_ELEMENT,
+          severity: "error",
+          message: `Unexpected element '${childName}'.`,
+          ...getLocationFields(context, childNode, xmlNode),
+          path: buildXmlPath([...pathParts, childName]),
+          source: "xml",
+          nodeKind: "element",
+          name: childName,
+          details: {}
+        })
+      );
+    }
+  }
+
+  const pseudoElementDecl = {
+    name: localName(xmlNode),
+    typeName: baseTypeName,
+    inlineType: null,
+    refName: null
+  };
+
+  const valueResult = validateElementValue(schema, pseudoElementDecl, value);
+
+  if (!valueResult.ok) {
+    issues.push(
+      createIssue({
+        code: ISSUE_CODES[valueResult.code] || valueResult.code,
+        severity: "error",
+        message: valueResult.message,
+        ...getTextValueLocationFields(context, xmlNode),
+        path: buildXmlPath(pathParts),
+        source: "xml",
+        nodeKind: "element",
+        name: localName(xmlNode),
+        details: { value }
+      })
+    );
+  }
+}
+
 function validateMixedContent(xmlNode, complexTypeDecl, context, pathParts) {
   const { createIssue, ISSUE_CODES, issues } = context;
   const hasDirectText = directTextNodes(xmlNode).some((node) => node.nodeValue?.trim());
+
+  if (isSimpleContentComplexType(complexTypeDecl)) {
+    return;
+  }
 
   if (!complexTypeDecl.mixed && hasDirectText) {
     issues.push(
@@ -240,6 +303,11 @@ function validateComplexElement(xmlNode, complexTypeDecl, context) {
 
   const attributes = getEffectiveAttributes(schema, complexTypeDecl);
   validateAttributes(xmlNode, attributes, context);
+
+  if (isSimpleContentComplexType(complexTypeDecl)) {
+    validateSimpleContentElement(xmlNode, complexTypeDecl, context);
+    return;
+  }
 
   validateMixedContent(xmlNode, complexTypeDecl, context, pathParts);
 

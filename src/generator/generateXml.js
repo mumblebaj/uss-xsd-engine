@@ -37,7 +37,6 @@ function createNamespaceContext(schema, rootDecl, options) {
     return prefix;
   }
 
-  // register root namespace first
   if (rootDecl.namespaceUri) {
     register(rootDecl.namespaceUri, options.targetPrefix || "tns");
   }
@@ -136,6 +135,82 @@ function buildAttributesObject(schema, attributes, options, state) {
   return out;
 }
 
+function buildRepresentativeNodesFromContent(schema, contentNode, options, state) {
+  if (!contentNode) return [];
+
+  switch (contentNode.kind) {
+    case "sequence":
+    case "all": {
+      for (const child of asArray(contentNode.children)) {
+        const built = buildRepresentativeNodesFromContent(
+          schema,
+          child,
+          options,
+          state,
+        );
+        if (built.length) return built;
+      }
+      return [];
+    }
+
+    case "choice": {
+      const selected = pickChoiceChildren(
+        asArray(contentNode.children),
+        options.mode,
+      );
+      for (const child of selected) {
+        const built = buildRepresentativeNodesFromContent(
+          schema,
+          child,
+          options,
+          state,
+        );
+        if (built.length) return built;
+      }
+      return [];
+    }
+
+    case "groupRef": {
+      const group = resolveGroup(schema, contentNode.refName);
+      if (!group?.content) return [];
+      return buildRepresentativeNodesFromContent(
+        schema,
+        group.content,
+        options,
+        state,
+      );
+    }
+
+    case "element":
+      return [
+        buildElementNode(
+          schema,
+          {
+            ...contentNode,
+            minOccurs: 1,
+            maxOccurs: 1,
+          },
+          options,
+          state,
+          false,
+        ),
+      ];
+
+    case "any":
+      return [
+        {
+          name: "anyElement",
+          attributes: {},
+          children: [],
+          text: "example",
+        },
+      ];
+
+    default:
+      return [];
+  }
+}
+
 function buildNodesFromContent(schema, contentNode, options, state) {
   if (!contentNode) return [];
 
@@ -191,11 +266,26 @@ function buildComplexTypeContent(schema, complexTypeDecl, options, state) {
   const content = getEffectiveContent(schema, complexTypeDecl);
   const attributes = getEffectiveAttributes(schema, complexTypeDecl);
 
+  let children = content
+    ? buildNodesFromContent(schema, content, options, state)
+    : [];
+
+  if (
+    options.mode === "minimal" &&
+    children.length === 0 &&
+    content
+  ) {
+    children = buildRepresentativeNodesFromContent(
+      schema,
+      content,
+      options,
+      state,
+    );
+  }
+
   return {
     attributes: buildAttributesObject(schema, attributes, options, state),
-    children: content
-      ? buildNodesFromContent(schema, content, options, state)
-      : [],
+    children,
   };
 }
 
@@ -232,6 +322,24 @@ function buildElementNode(schema, elementDecl, options, state, isRoot = false) {
       ...node.attributes,
       ...built.attributes,
     };
+
+    if (
+      resolvedType.contentModel === "simple" &&
+      resolvedType.derivation?.baseTypeName
+    ) {
+      const baseType = resolveElementType(schema, {
+        typeName: resolvedType.derivation.baseTypeName,
+      });
+
+      node.text =
+        elementDecl.fixedValue ??
+        elementDecl.defaultValue ??
+        createSampleValueForType(schema, baseType);
+
+      node.children = [];
+      return node;
+    }
+
     node.children = built.children;
     return node;
   }

@@ -81,6 +81,8 @@ function patternSample(patterns = [], fallback = "example") {
   if (pattern === "[0-9]+") return "123";
   if (pattern === "[A-Z0-9]+") return "ABC123";
   if (pattern === "[a-z]+") return "abc";
+  if (pattern == "[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}") return "de2da6c9-18be-48d4-8053-867ed90a316a";
+  if (pattern == "[A-Z0-9]{4,4}[A-Z]{2,2}[A-Z0-9]{2,2}([A-Z0-9]{3,3}){0,1}") return "ABCDEFGH";
 
   return fallback;
 }
@@ -106,7 +108,7 @@ function builtinSample(localTypeName) {
     case "decimal":
     case "float":
     case "double":
-      return "0.0";
+      return "0.00";
 
     case "integer":
     case "nonPositiveInteger":
@@ -130,7 +132,7 @@ function builtinSample(localTypeName) {
       return "00:00:00";
 
     case "dateTime":
-      return "2026-01-01T00:00:00Z";
+      return "2026-01-01T00:00:00+00:00";
 
     case "duration":
       return "P1D";

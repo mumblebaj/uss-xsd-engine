@@ -103,41 +103,121 @@ export function isBuiltinType(typeName, schema = null) {
   return false;
 }
 
-function lookupByQName(bucket, schema, name) {
-  if (!bucket || !name) return null;
+function getLocalName(name) {
+  return parseQName(name).localName;
+}
 
+function lookupBucketByNamespace(bucket, namespaceUri, localName) {
+  if (!bucket || !localName) return null;
+  return bucket[makeLookupKey(namespaceUri, localName)] || null;
+}
+
+function lookupInSchemaBucket(bucketName, schema, namespaceUri, localName) {
+  return lookupBucketByNamespace(schema?.globals?.[bucketName], namespaceUri, localName);
+}
+
+function lookupInImportedSchemas(bucketName, schema, namespaceUri, localName, visited = new Set()) {
+  if (!schema || !namespaceUri) return null;
+  if (visited.has(schema)) return null;
+
+  visited.add(schema);
+
+  for (const importedSchema of schema.importedSchemas || []) {
+    if (!importedSchema) continue;
+
+    if ((importedSchema.targetNamespace || null) === namespaceUri) {
+      const direct = lookupInSchemaBucket(
+        bucketName,
+        importedSchema,
+        namespaceUri,
+        localName
+      );
+      if (direct) return direct;
+    }
+
+    const nested = lookupInImportedSchemas(
+      bucketName,
+      importedSchema,
+      namespaceUri,
+      localName,
+      visited
+    );
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+function lookupByQName(bucketName, schema, name) {
+  if (!schema || !name) return null;
+
+  const parsed = parseQName(name);
   const resolved = resolveQName(schema, name);
-  const directKey = makeLookupKey(resolved.namespaceUri, resolved.localName);
+  const localName = resolved.localName;
 
-  return (
-    bucket[directKey] ||
-    bucket[makeLookupKey(null, resolved.localName)] ||
-    null
-  );
+  if (!localName) return null;
+
+  // Prefixed QName: strict namespace match only.
+  if (parsed.prefix) {
+    const direct = lookupInSchemaBucket(
+      bucketName,
+      schema,
+      resolved.namespaceUri,
+      localName
+    );
+    if (direct) return direct;
+
+    return lookupInImportedSchemas(
+      bucketName,
+      schema,
+      resolved.namespaceUri,
+      localName
+    );
+  }
+
+  // Unprefixed QName:
+  // 1) try no-namespace declarations
+  // 2) try this schema's targetNamespace
+  // Do NOT leak into unrelated imported namespaces.
+  const noNamespace = lookupInSchemaBucket(bucketName, schema, null, localName);
+  if (noNamespace) return noNamespace;
+
+  const sameSchemaNs = schema.targetNamespace || null;
+  if (sameSchemaNs !== null) {
+    const hostNamespaceDecl = lookupInSchemaBucket(
+      bucketName,
+      schema,
+      sameSchemaNs,
+      localName
+    );
+    if (hostNamespaceDecl) return hostNamespaceDecl;
+  }
+
+  return null;
 }
 
 export function resolveGlobalElement(schema, name) {
-  return lookupByQName(schema?.globals?.elements, schema, name);
+  return lookupByQName("elements", schema, name);
 }
 
 export function resolveGlobalComplexType(schema, name) {
-  return lookupByQName(schema?.globals?.complexTypes, schema, name);
+  return lookupByQName("complexTypes", schema, name);
 }
 
 export function resolveGlobalSimpleType(schema, name) {
-  return lookupByQName(schema?.globals?.simpleTypes, schema, name);
+  return lookupByQName("simpleTypes", schema, name);
 }
 
 export function resolveGlobalAttribute(schema, name) {
-  return lookupByQName(schema?.globals?.attributes, schema, name);
+  return lookupByQName("attributes", schema, name);
 }
 
 export function resolveGroup(schema, name) {
-  return lookupByQName(schema?.globals?.groups, schema, name);
+  return lookupByQName("groups", schema, name);
 }
 
 export function resolveAttributeGroup(schema, name) {
-  return lookupByQName(schema?.globals?.attributeGroups, schema, name);
+  return lookupByQName("attributeGroups", schema, name);
 }
 
 export function resolveType(schema, typeName) {
@@ -146,7 +226,7 @@ export function resolveType(schema, typeName) {
   if (isBuiltinType(typeName, schema)) {
     return {
       kind: "builtinType",
-      name: parseQName(typeName).localName,
+      name: getLocalName(typeName),
       qName: typeName
     };
   }
@@ -188,7 +268,10 @@ export function getEffectiveSimpleType(schema, simpleTypeDecl) {
   const facets = { ...(simpleTypeDecl.facets || {}) };
   const enumerations = [...(simpleTypeDecl.enumerations || [])];
 
-  if (simpleTypeDecl.baseTypeName && !isBuiltinType(simpleTypeDecl.baseTypeName, schema)) {
+  if (
+    simpleTypeDecl.baseTypeName &&
+    !isBuiltinType(simpleTypeDecl.baseTypeName, schema)
+  ) {
     const base = resolveGlobalSimpleType(schema, simpleTypeDecl.baseTypeName);
     if (base) {
       const baseEffective = getEffectiveSimpleType(schema, base);

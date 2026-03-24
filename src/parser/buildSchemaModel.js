@@ -20,7 +20,6 @@ import { ISSUE_CODES } from "../diagnostics/issueCodes.js";
 import {
   makeLookupKey,
   parseQName,
-  resolveNamespaceUri,
   stripNamespacePrefix,
 } from "../resolver/schemaResolvers.js";
 
@@ -103,6 +102,8 @@ function mergeGlobalsIntoSchema(
   targetSchema.externalRefs.imports.push(
     ...(sourceSchema.externalRefs.imports || []),
   );
+
+  targetSchema.importedSchemas.push(...(sourceSchema.importedSchemas || []));
 
   for (const feature of sourceSchema.usedFeatures || []) {
     targetSchema.usedFeatures.add(feature);
@@ -511,12 +512,12 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
     : null;
 
   const qName = node.getAttribute("name");
-  const namespaceURI = getDeclarationNamespaceUri(schema, node, "attribute");
+  const namespaceUri = getDeclarationNamespaceUri(schema, node, "attribute");
 
   return createAttributeDecl({
     name: qName ? parseQName(qName).localName : null,
     qName,
-    namespaceURI,
+    namespaceUri,
     typeName: node.getAttribute("type"),
     refName: node.getAttribute("ref"),
     inlineType,
@@ -869,6 +870,7 @@ function parseComplexType(
   let content = null;
   let attributes = [];
   let derivation = { kind: null, baseTypeName: null };
+  let contentModel = "complex";
 
   const children = elementChildren(node);
 
@@ -895,6 +897,10 @@ function parseComplexType(
   const simpleContent = children.find(
     (child) => child.localName === "simpleContent",
   );
+
+  if (simpleContent) {
+    contentModel = "simple";
+  }
 
   if (complexContent || simpleContent) {
     const wrapper = complexContent || simpleContent;
@@ -938,15 +944,16 @@ function parseComplexType(
   }
 
   const qName = node.getAttribute("name");
-  const namespaceURI = schema.targetNamespace || null;
+  const namespaceUri = schema.targetNamespace || null;
 
   return createComplexTypeDecl({
     name: qName ? parseQName(qName).localName : null,
     qName,
-    namespaceURI,
+    namespaceUri,
     content,
     attributes,
     derivation,
+    contentModel,
     mixed: node.getAttribute("mixed") === "true",
     abstract: node.getAttribute("abstract") === "true",
     line: loc.line,
@@ -1020,6 +1027,32 @@ function parseAttributeGroup(
   });
 }
 
+function getEffectiveTargetNamespace(schemaRoot, options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, "_overrideTargetNamespace")) {
+    return options._overrideTargetNamespace;
+  }
+
+  return schemaRoot.getAttribute("targetNamespace");
+}
+
+function isIncludeNamespaceCompatible(hostSchema, includedSchema) {
+  const hostNs = hostSchema?.targetNamespace || null;
+  const includedNs = includedSchema?.targetNamespace || null;
+
+  return hostNs === includedNs;
+}
+
+function isImportNamespaceCompatible(ref, importedSchema) {
+  const declaredNs = ref?.namespace || null;
+  const importedNs = importedSchema?.targetNamespace || null;
+
+  if (!declaredNs) {
+    return true;
+  }
+
+  return declaredNs === importedNs;
+}
+
 export function buildSchemaModel(doc, options = {}) {
   const issues = [];
   const schema = createEmptySchemaModel();
@@ -1040,7 +1073,7 @@ export function buildSchemaModel(doc, options = {}) {
     return { schema: null, issues };
   }
 
-  schema.targetNamespace = schemaRoot.getAttribute("targetNamespace");
+  schema.targetNamespace = getEffectiveTargetNamespace(schemaRoot, options);
   schema.elementFormDefault = schemaRoot.getAttribute("elementFormDefault");
   schema.attributeFormDefault = schemaRoot.getAttribute("attributeFormDefault");
 
@@ -1232,57 +1265,136 @@ export function buildSchemaModel(doc, options = {}) {
       details: { declarationName: decl.name },
     });
 
-const visited = options._visitedExternalSchemas || new Set();
+  const visited = options._visitedExternalSchemas || new Set();
 
-const allExternalRefs = [
-  ...(schema.externalRefs.includes || []),
-  ...(schema.externalRefs.imports || []),
-];
+  const includes = schema.externalRefs.includes || [];
+  const imports = schema.externalRefs.imports || [];
 
-for (const ref of allExternalRefs) {
-  if (!ref.schemaLocation) continue;
+  for (const ref of [...includes, ...imports]) {
+    if (!ref.schemaLocation) continue;
 
-  // prevent circular / duplicate processing
-  if (visited.has(ref.schemaLocation)) {
-    continue;
-  }
+    const visitKey =
+      ref.kind === "include" && schema.targetNamespace
+        ? `${ref.schemaLocation}::include::${schema.targetNamespace}`
+        : ref.schemaLocation;
 
-  const externalXsdText = externalDocuments[ref.schemaLocation];
-  if (!externalXsdText) {
-    continue;
-  }
+    if (visited.has(visitKey)) {
+      continue;
+    }
 
-  visited.add(ref.schemaLocation);
+    const externalXsdText = externalDocuments[ref.schemaLocation];
+    if (!externalXsdText) {
+      issues.push(
+        createIssue({
+          code:
+            ref.kind === "include"
+              ? ISSUE_CODES.XSD_INCLUDE_NOT_PROVIDED
+              : ISSUE_CODES.XSD_IMPORT_NOT_PROVIDED,
+          severity: "error",
+          message: `External schema not provided for xs:${ref.kind} '${ref.schemaLocation}'.`,
+          line: ref.line,
+          column: ref.column,
+          path: ref.path,
+          source: "xsd",
+          nodeKind: ref.kind,
+          details: {
+            schemaLocation: ref.schemaLocation,
+            namespace: ref.namespace,
+          },
+        }),
+      );
+      continue;
+    }
 
-  const parser = new DOMParser();
-  const externalDoc = parser.parseFromString(
-    externalXsdText,
-    "application/xml"
-  );
+    visited.add(visitKey);
 
-  const parserError = externalDoc.querySelector("parsererror");
-  if (parserError) {
-    continue;
-  }
-
-  const externalBuild = buildSchemaModel(externalDoc, {
-    ...options,
-    xsdText: externalXsdText,
-    externalDocuments, // ✅ PASS THROUGH (critical)
-    _visitedExternalSchemas: visited // ✅ recursion tracking
-  });
-
-  if (externalBuild.schema) {
-    mergeGlobalsIntoSchema(
-      schema,
-      externalBuild.schema,
-      issues,
-      createDuplicateIssue
+    const parser = new DOMParser();
+    const externalDoc = parser.parseFromString(
+      externalXsdText,
+      "application/xml",
     );
-  }
 
-  issues.push(...(externalBuild.issues || []));
-}
+    const parserError = externalDoc.querySelector("parsererror");
+    if (parserError) {
+      continue;
+    }
+
+    const externalRoot = getSchemaRoot(externalDoc);
+    const externalDeclaredTargetNamespace =
+      externalRoot?.getAttribute("targetNamespace") || null;
+
+    const shouldApplyChameleonInclude =
+      ref.kind === "include" &&
+      (schema.targetNamespace || null) !== null &&
+      externalDeclaredTargetNamespace === null;
+
+    const externalBuild = buildSchemaModel(externalDoc, {
+      ...options,
+      xsdText: externalXsdText,
+      externalDocuments,
+      _visitedExternalSchemas: visited,
+      _overrideTargetNamespace: shouldApplyChameleonInclude
+        ? schema.targetNamespace
+        : undefined,
+    });
+
+    if (externalBuild.schema) {
+      if (ref.kind === "include") {
+        if (!isIncludeNamespaceCompatible(schema, externalBuild.schema)) {
+          issues.push(
+            createIssue({
+              code: ISSUE_CODES.XSD_INCLUDE_NAMESPACE_MISMATCH,
+              severity: "error",
+              message: `xs:include namespace mismatch. Host targetNamespace is '${schema.targetNamespace || ""}', included schema targetNamespace is '${externalBuild.schema.targetNamespace || ""}'.`,
+              line: ref.line,
+              column: ref.column,
+              path: ref.path,
+              source: "xsd",
+              nodeKind: "include",
+              details: {
+                schemaLocation: ref.schemaLocation,
+                hostTargetNamespace: schema.targetNamespace || null,
+                includedTargetNamespace: externalBuild.schema.targetNamespace || null,
+                includedDeclaredTargetNamespace: externalDeclaredTargetNamespace,
+                chameleonAdopted: shouldApplyChameleonInclude,
+              },
+            }),
+          );
+        } else {
+          mergeGlobalsIntoSchema(
+            schema,
+            externalBuild.schema,
+            issues,
+            createDuplicateIssue,
+          );
+        }
+      } else if (ref.kind === "import") {
+        if (!isImportNamespaceCompatible(ref, externalBuild.schema)) {
+          issues.push(
+            createIssue({
+              code: ISSUE_CODES.XSD_IMPORT_NAMESPACE_MISMATCH,
+              severity: "error",
+              message: `xs:import namespace mismatch. Declared namespace is '${ref.namespace || ""}', imported schema targetNamespace is '${externalBuild.schema.targetNamespace || ""}'.`,
+              line: ref.line,
+              column: ref.column,
+              path: ref.path,
+              source: "xsd",
+              nodeKind: "import",
+              details: {
+                schemaLocation: ref.schemaLocation,
+                declaredNamespace: ref.namespace || null,
+                importedTargetNamespace: externalBuild.schema.targetNamespace || null,
+              },
+            }),
+          );
+        } else {
+          schema.importedSchemas.push(externalBuild.schema);
+        }
+      }
+    }
+
+    issues.push(...(externalBuild.issues || []));
+  }
 
   return { schema, issues };
 }

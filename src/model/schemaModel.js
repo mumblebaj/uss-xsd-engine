@@ -25,6 +25,8 @@ export function createEmptySchemaModel() {
       imports: []
     },
 
+    importedSchemas: [],
+
     roots: [],
 
     references: {
@@ -134,6 +136,7 @@ export function createComplexTypeDecl({
   content = null,
   attributes = [],
   derivation = { kind: null, baseTypeName: null },
+  contentModel = "complex",
   mixed = false,
   abstract = false,
   line = null,
@@ -148,6 +151,7 @@ export function createComplexTypeDecl({
     content,
     attributes,
     derivation,
+    contentModel,
     mixed,
     abstract,
     line,

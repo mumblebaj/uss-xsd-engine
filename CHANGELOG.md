@@ -1,5 +1,106 @@
 # Changelog
 
+## [0.1.0-beta.5]
+
+## 🧪 uss-xsd-engine v0.1.0-beta.5
+
+This release introduces significant improvements to XML validation correctness and sample XML generation, particularly for real-world financial schemas such as ISO 20022 (CBPR+).
+
+### ✨ Highlights
+`simpleContent` Support (Major Enhancement)
+* Added full support for `xs:complexType/xs:simpleContent`
+* Correctly validates elements that:
+  * contain text content derived from a base simple type
+  * include attributes via `xs:extension`
+* Fixes validation issues for common financial patterns such as:
+
+```XML
+<IntrBkSttlmAmt Ccy="ZAR">123.45</IntrBkSttlmAmt>
+```
+
+#### Improved XML Validation Semantics
+* Correct handling of text content for:
+  * `simpleContent` (allowed and validated)
+  * non-mixed complex types (text correctly rejected)
+* Eliminates false positives for:
+  * `XML_MIXED_CONTENT_NOT_ALLOWED` on valid simpleContent elements
+
+---
+
+### 🧬 Sample XML Generation Improvements
+`simpleContent` Generation
+Complex types using `simpleContent` now generate:
+text values (from base simple type)
+attributes
+Example improvement:
+
+```XML
+<!-- Before -->
+<IntrBkSttlmAmt Ccy="ZAR"/>
+
+<!-- After -->
+<IntrBkSttlmAmt Ccy="ZAR">123.45</IntrBkSttlmAmt>
+```
+
+* Minimal Mode Enhancements
+* Prevents empty complex elements when content exists
+* Generates a representative child path when:
+  * all children are optional
+  * minimal mode would otherwise produce empty nodes
+* Example:
+
+```XML
+<!-- Before -->
+<Dbtr/>
+
+<!-- After -->
+<Dbtr>
+  <Nm>example</Nm>
+</Dbtr>
+```
+
+---
+
+### 🧪 Validation Improvements
+* Enhanced consistency between:
+  * root-level validation
+  * nested structure validation (`structureValidator`)
+* Unified handling of:
+  * text nodes
+  * element content rules
+* Improved attribute + value validation alignment
+
+---
+
+### Real-World Schema Compatibility
+
+Validated against:
+
+* ISO 20022 CBPR+ `pacs.008.001.08`
+
+Key improvements:
+
+* Amount + currency handling (`simpleContent`)
+* Pattern validation (e.g. UETR)
+* Numeric facet enforcement (`fractionDigits`, `totalDigits`)
+* Complex structure traversal
+
+---
+
+### Internal Improvements
+* Added `contentModel` tracking to schema model (`simple` vs `complex`)
+* Improved consistency across:
+  * parser
+  * resolver
+  * validator
+  * generator
+
+---
+
+<details>
+
+<summary>XSD Engine Evolution (Validation, Source Mapping, Namespaces)</summary>
+
 ## [0.1.0-beta.4] — XSD Engine Evolution (Validation, Source Mapping, Namespaces)
 
 ### 🚀 Major Enhancements
@@ -124,3 +225,5 @@ This release prepares the engine for:
 * Prefix-aware diagnostics
 
 ---
+
+</details>

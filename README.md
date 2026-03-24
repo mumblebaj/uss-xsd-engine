@@ -299,38 +299,64 @@ Use **uss-xsd-engine** if you need:
 ---
 
 ## ⚠️ Supported vs Not Fully Supported
-### ✅ Supported (v0.1.x)
-- Most common XSD structures
-- Namespace-aware resolution
+### ✅ Supported (v0.1.x / RC)
+- XSD parsing into an internal schema model
+- Namespace-aware resolution (elements, types, attributes, groups)
 - Extensions (`xs:extension`)
-- Restrictions (subset + occurrence checks)
-- Facet validation (including pattern)
-- Default / fixed semantics
-- Include/import (manual provision with recursive resolution)
-- Sample XML generation (namespace-aware, multi-schema support)
-- XML validation (structure, facets, and source-mapped diagnostics)
+- Restrictions (subset enforcement, occurrence narrowing, attribute constraints)
+- Facet validation:
+  - length, numeric, pattern, enumeration, digits
+- Default / fixed semantics (schema + XML validation)
+- Include/import:
+  - manual provision via `externalDocuments`
+  - recursive resolution
+  - strict namespace enforcement
+- Chameleon includes (namespace adoption for no-targetNamespace schemas)
+- Namespace-aware sample XML generation:
+  - minimal + representative modes
+  - pattern-aware generation (e.g., UETR, BIC)
+- XML validation:
+  - structural validation (sequence, choice, all, groups)
+  - simpleContent + complexContent enforcement
+  - mixed content handling
+  - restriction validation (pass 2)
+- Root and nested `simpleContent` validation alignment
 - XML parse diagnostics with line/column support
-- Semantic validation diagnostics with line/column support
-- Attribute and value-level source mapping
+- Semantic XML diagnostics with line/column support
+- Attribute, value, and text source mapping
 - Namespace-aware schema tree extraction
+- Imported schema isolation with namespace-safe lookup
+- QName resolution:
+  - prefixed + default namespace handling
+  - no cross-namespace leakage
 
 ---
 
 ## ⚠️ Partially Supported / In Progress
-- Deep sample XML expansion (choice branching, recursion depth)
-- Full restriction theorem validation (advanced edge cases)
-- Advanced Namespace handling (prefix customizatioon, default namespace strategies)
-- Advanced wildcard (`xs:any`, `xs:anyAttribute`)
-- Attribute namespace qualification
+- Deep sample XML expansion:
+  - complex choice branching
+  - recursion depth control
+- Full restriction theorem validation:
+  - advanced edge cases (beyond practical subset checks)
+- Advanced wildcard handling:
+  - `xs:any`
+  - `xs:anyAttribute`
+- Attribute namespace qualification edge cases
 
 ---
 
 ## ❌ Not Supported Yet
-- Identity constraints (`xs:key`, `xs:keyref`, `xs:unique`)
+- Identity constraints:
+  - `xs:key`
+  - `xs:keyref`
+  - `xs:unique`
+- `xs:redefine`
 - Automatic network fetching of schemas
-- Full W3C spec conformance (edge-case completeness)
-- Streaming validation for very large XML
-- Chameleon includes (namespace adaptation)
+  - (engine is intentionally browser-first and caller-driven)
+- Full W3C spec completeness
+  - (focus is practical + real-world coverage)
+- Streaming / incremental validation for very large XML
+
 
 ---
 

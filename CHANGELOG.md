@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.1.0-rc.1]
+
+## 🎉 Release Candidate
+
+This marks the first Release Candidate (RC) of `uss-xsd-engine` — a browser-first XML Schema (XSD) engine designed for validation, tooling, and developer workflows.
+
+This is release locks in the functionality. This will remain in RC for 2 weeks.
+
+Any feedback or issues during this phase will be greatly appreciated.
+
+### ✨ Highlights
+- ✅ Browser-first architecture (no heavy dependencies)
+- ✅ XSD parsing into internal schema model
+- ✅ XML validation against XSD
+- ✅ Sample XML generation
+- ✅ Schema tree extraction
+- ✅ Schema diagnostics support
+
+### 🧠 Advanced Features
+- Namespace-aware resolution and validation
+- Namespace-aware sample XML generation
+- Mixed content handling
+- Extension support (`xs:extension`)
+- Restriction enforcement (pass 2)
+- Facet/value validation
+- Recursive include/import handling (caller-provided schemas)
+- Attribute and value-level validation
+- Source-mapped diagnostics (line/column support)
+
+```JavaScript
+getSchemaDiagnostics(...)
+extractSchemaTree(...)
+generateSampleXml(...)
+validateXml(...)
+```
+
+### ⚠️ Stability
+
+This is a Release Candidate:
+
+- Core APIs are considered stable
+- No breaking changes are expected before `v0.1.0`
+- Minor fixes and improvements may still occur
+
+
+### 🚧 Known limitations (current scope)
+- Identity constraints (`xs:key`, `xs:keyref`, `xs:unique`) not yet supported
+- Advanced wildcard handling (`xs:any`, `xs:anyAttribute`) partial
+- Some deep restriction edge cases still under refinement
+
+## 🙌 Feedback
+
+Early feedback is welcome — especially around:
+
+- large/complex schemas
+- namespace-heavy use cases
+- performance observations
+
 ## [0.1.0-beta.5]
 
 ## 🧪 uss-xsd-engine v0.1.0-beta.5

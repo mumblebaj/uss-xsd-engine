@@ -5,6 +5,9 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 ---
 
 ![npm](https://img.shields.io/npm/v/uss-xsd-engine)
+![dw](https://img.shields.io/npm/dw/uss-xsd-engine)
+![dm](https://img.shields.io/npm/dm/uss-xsd-engine)
+![dy](https://img.shields.io/npm/dy/uss-xsd-engine)
 [![Jsdelivr](https://data.jsdelivr.com/v1/package/npm/uss-xsd-engine/badge)](https://www.jsdelivr.com/package/npm/uss-xsd-engine)
 
 ---

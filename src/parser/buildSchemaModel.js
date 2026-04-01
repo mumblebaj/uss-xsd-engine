@@ -1028,7 +1028,10 @@ function parseAttributeGroup(
 }
 
 function getEffectiveTargetNamespace(schemaRoot, options = {}) {
-  if (Object.prototype.hasOwnProperty.call(options, "_overrideTargetNamespace")) {
+  if (
+    Object.prototype.hasOwnProperty.call(options, "_overrideTargetNamespace") &&
+    options._overrideTargetNamespace !== undefined
+  ) {
     return options._overrideTargetNamespace;
   }
 
@@ -1043,14 +1046,23 @@ function isIncludeNamespaceCompatible(hostSchema, includedSchema) {
 }
 
 function isImportNamespaceCompatible(ref, importedSchema) {
-  const declaredNs = ref?.namespace || null;
-  const importedNs = importedSchema?.targetNamespace || null;
+  const declaredNs =
+    ref && Object.prototype.hasOwnProperty.call(ref, "namespace")
+      ? ref.namespace
+      : null;
+  const importedNs =
+    importedSchema &&
+    Object.prototype.hasOwnProperty.call(importedSchema, "targetNamespace")
+      ? importedSchema.targetNamespace
+      : null;
 
   if (!declaredNs) {
     return true;
   }
 
-  return declaredNs === importedNs;
+  return (declaredNs || null) === (importedNs || null);
+
+  // return declaredNs === importedNs;
 }
 
 export function buildSchemaModel(doc, options = {}) {
@@ -1320,24 +1332,30 @@ export function buildSchemaModel(doc, options = {}) {
     }
 
     const externalRoot = getSchemaRoot(externalDoc);
-    const externalDeclaredTargetNamespace =
-      externalRoot?.getAttribute("targetNamespace") || null;
+
+    const externalDeclaredTargetNamespace = externalRoot?.hasAttribute(
+      "targetNamespace",
+    )
+      ? externalRoot.getAttribute("targetNamespace")
+      : null;
 
     const shouldApplyChameleonInclude =
-      ref.kind === "include" &&
-      externalDeclaredTargetNamespace === null;
+      ref.kind === "include" && externalDeclaredTargetNamespace === null;
 
     const externalBuild = buildSchemaModel(externalDoc, {
       ...options,
       xsdText: externalXsdText,
       externalDocuments,
       _visitedExternalSchemas: visited,
-      _overrideTargetNamespace: shouldApplyChameleonInclude
-        ? schema.targetNamespace
-        : undefined,
+      ...(shouldApplyChameleonInclude
+        ? { _overrideTargetNamespace: schema.targetNamespace }
+        : {}),
     });
 
     if (externalBuild.schema) {
+      if (ref.kind === "import") {
+        schema.importedSchemas.push(externalBuild.schema);
+      }
       if (ref.kind === "include") {
         if (!isIncludeNamespaceCompatible(schema, externalBuild.schema)) {
           issues.push(
@@ -1353,8 +1371,10 @@ export function buildSchemaModel(doc, options = {}) {
               details: {
                 schemaLocation: ref.schemaLocation,
                 hostTargetNamespace: schema.targetNamespace || null,
-                includedTargetNamespace: externalBuild.schema.targetNamespace || null,
-                includedDeclaredTargetNamespace: externalDeclaredTargetNamespace,
+                includedTargetNamespace:
+                  externalBuild.schema.targetNamespace || null,
+                includedDeclaredTargetNamespace:
+                  externalDeclaredTargetNamespace,
                 chameleonAdopted: shouldApplyChameleonInclude,
               },
             }),
@@ -1382,7 +1402,8 @@ export function buildSchemaModel(doc, options = {}) {
               details: {
                 schemaLocation: ref.schemaLocation,
                 declaredNamespace: ref.namespace || null,
-                importedTargetNamespace: externalBuild.schema.targetNamespace || null,
+                importedTargetNamespace:
+                  externalBuild.schema.targetNamespace || null,
               },
             }),
           );

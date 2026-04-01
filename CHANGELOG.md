@@ -1,5 +1,182 @@
 # Changelog
 
+## [0.1.0-rc.2]
+
+## Critical Fix
+
+### 1. Fix: Imported schea `targetNamespace` incorrectly resolved as empty
+
+#### Problem
+Imported schemas (`xs:import`) were beig built with
+
+```JavaScript
+_overrideTargetNamespace: undefined
+```
+Because the property existed, this logic:
+```JavaScript
+if (hasOwnProperty("_overrideTargetNamespace"))
+```
+forced the engine to use `undefined` instead of the actual:
+```XML
+targetNamespace="..."
+```
+
+#### Symptoms
+- `XSD_IMPORT_NAMESPACE_MISMATCH`
+- Imported namespace reported as `''` or null
+- All cross-namespace resolution failed
+
+#### Fix
+Only apply `_overrideTargetNamespace` when needed (chameleon include):
+
+```JavaScript
+...(shouldApplyChameleonInclude
+  ? { _overrideTargetNamespace: schema.targetNamespace }
+  : {})
+```
+
+#### Result
+- Imported schemas retain correct namespace
+- Namespace comparison works correctly
+- Import resolution behaves per XSD spec
+
+### 2. Fix: Imported schemas not participating in type resolution
+
+#### Problem
+Even when imports were parsed, they were not reliabily available during resolution because:
+* Namespace was broken (see fix #1)
+* Imported schemas were not properly useable in resolver
+
+#### Fix
+Ensure imported schemas are preserved and traversed via:
+
+```JavaScript
+schema.importSchemas
+```
+and resolved via:
+
+```JavaScript
+lookupInImportedSchemas(...)
+```
+
+#### Result
+* Cross-namespace type resolution works
+* `xs:extension base="ns:Type"` resolves correctly
+* Deep schema graphs now function
+
+### 3. Fix: False namespace mismatch error
+
+#### Problem
+Namespace comparison logic:
+
+```JavaScript
+declaredNs === importedNs
+```
+was failing due to `importedNs` being `undefined`
+
+#### Result after fix
+* Correct namespace comparison
+* No false mismatch errors
+* Proper XSD import semantics
+
+## Behavioral Improvements
+
+### Proper seperationof `xs:include` vs `xs:import`
+
+|Feature	|Behavior |
+|:-|:-:|
+|`xs:include`	|Merges globals into host schema|
+|`xs:import`	|Registers schema in `importedSchemas`|
+
+#### Why this matters
+* Includes = same namespace → merge
+* Imports = different namesapce → isolate + resolve
+
+#### Result
+* Standards-compliant schema composition
+* Correct namesapce isolation
+* Scalable multi-schema support
+
+### Recursive schema graph resolution
+Engine now correctly supports:
+* multi-level imports
+* chained extensions
+* cross-file type inheritance
+
+Example now supported:
+
+```XML
+A → imports B
+B → imports C
+C → defines BaseType
+A → extends BaseType
+```
+
+## Impact
+
+### Before
+* Imports appeared loaded but unusable
+* Namespace mismatches
+* Base types unresolved
+* Large schemas failed
+
+### After
+* Imports fully functional
+* Namespace-aware resolution working
+* Complex schema sets supported
+* Sample XML generation works across imports
+
+## Breaking / Important Usage Notes
+
+### 1. External documents must be provided
+Imports require explicit external schema input:
+
+```JavaScript
+getSchemaDiagnostics({
+  xsdText,
+  options: {
+    externalDocuments: {
+      "EnterpriseMessage-1.0.xsd": "...schema text..."
+    }
+  }
+});
+```
+
+#### Important
+* Key must match `schemaLocation`
+* Case-sensitive
+* No automatic fetching
+
+### 2. Correct API usage (object-based)
+
+#### Correct
+
+```JavaScript
+getSchemaDiagnostics({
+  xsdText,
+  options: {
+    externalDocuments
+  }
+});
+```
+
+#### Incorrect
+
+```JavaScript
+getSchemaDiagnostics(xsdText, options)
+```
+
+### 3. All engine calls must receive externalDocuments
+For consistency:
+
+```JavaScript
+extractSchemaTree({ xsdText, options })
+generateSampleXml(xsdText, options)
+validateXml(xsdText, xmlText, options)
+```
+Always pass the same `externalDocuments`
+
+
 ## [0.1.0-rc.1]
 
 ## 🎉 Release Candidate

@@ -421,13 +421,23 @@ export function generateXmlFromSchema(schema, options = {}, helpers = {}) {
     nsContext,
   };
 
-  const [rootNode] = buildElementInstances(
-    schema,
-    root,
-    normalizedOptions,
-    state,
-    true,
-  );
+const [rootNode] = buildElementInstances(
+  schema,
+  root,
+  normalizedOptions,
+  state,
+  true,
+);
+
+// 🔥 PATCH: rebuild root xmlns AFTER full traversal
+if (rootNode) {
+  const finalNsAttrs = buildRootNamespaceAttributes(schema, root, state);
+
+  rootNode.attributes = {
+    ...finalNsAttrs,
+    ...rootNode.attributes, // preserve any existing attrs
+  };
+}
 
   return {
     rootElementName: root.name,

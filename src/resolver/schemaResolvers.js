@@ -148,6 +148,48 @@ function lookupInImportedSchemas(bucketName, schema, namespaceUri, localName, vi
   return null;
 }
 
+function lookupInImportedSchemasForUnprefixed(
+  bucketName,
+  schema,
+  localName,
+  visited = new Set(),
+) {
+  if (!schema || !localName) return null;
+  if (visited.has(schema)) return null;
+
+  visited.add(schema);
+
+  const targetNs = schema.targetNamespace || null;
+
+  for (const importedSchema of schema.importedSchemas || []) {
+    if (!importedSchema) continue;
+
+    const importedNs = importedSchema.targetNamespace || null;
+
+    // For unprefixed names, only search imported schemas that share the
+    // same effective namespace as the current schema.
+    if (importedNs === targetNs) {
+      const direct = lookupInSchemaBucket(
+        bucketName,
+        importedSchema,
+        importedNs,
+        localName,
+      );
+      if (direct) return direct;
+    }
+
+    const nested = lookupInImportedSchemasForUnprefixed(
+      bucketName,
+      importedSchema,
+      localName,
+      visited,
+    );
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
 function lookupByQName(bucketName, schema, name) {
   if (!schema || !name) return null;
 
@@ -178,6 +220,8 @@ function lookupByQName(bucketName, schema, name) {
   // Unprefixed QName:
   // 1) try no-namespace declarations
   // 2) try this schema's targetNamespace
+  // 3) if still unresolved, search imported schemas that share the same
+  //    effective targetNamespace as the current schema
   // Do NOT leak into unrelated imported namespaces.
   const noNamespace = lookupInSchemaBucket(bucketName, schema, null, localName);
   if (noNamespace) return noNamespace;
@@ -191,6 +235,13 @@ function lookupByQName(bucketName, schema, name) {
       localName
     );
     if (hostNamespaceDecl) return hostNamespaceDecl;
+
+    const importedSameNamespaceDecl = lookupInImportedSchemasForUnprefixed(
+      bucketName,
+      schema,
+      localName
+    );
+    if (importedSameNamespaceDecl) return importedSameNamespaceDecl;
   }
 
   return null;

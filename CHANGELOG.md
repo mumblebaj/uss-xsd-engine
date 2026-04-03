@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.0]
+
+## Update XML Generation
+
+### Enhancements
+- Fixed namespace declaration handling in generated XML (all used namespaces now correctly emitted at root)
+- Improved namespace resolution across imported schemas
+- Enhanced sample XML generation to traverse deeper into imported complex types
+- Fixed unprefixed type resolution across same-namespace imports (prevents premature fallback to `example`)
+- More realistic sample output for multi-schema, real-world XSD structures
+
+### Improvements
+- Better handling of cross-namespace element/type resolution
+- More stable and consistent sample generation for complex schema graphs
+- Maintained lightweight, browser-first architecture without over-engineering
+
+### Result
+- Sample XML is now structurally closer to real-world payloads
+- Works reliably with deeply nested, multi-import XSDs
+- Provides a stronger baseline for further manual or UI-driven expansion
+
 ## [0.1.0-rc.2]
 
 ## Critical Fix

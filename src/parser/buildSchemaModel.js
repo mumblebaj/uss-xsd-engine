@@ -1061,8 +1061,131 @@ function isImportNamespaceCompatible(ref, importedSchema) {
   }
 
   return (declaredNs || null) === (importedNs || null);
+}
 
-  // return declaredNs === importedNs;
+function normalizeSchemaPath(value) {
+  if (!value || typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  return trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function getSchemaPathBasename(value) {
+  const normalized = normalizeSchemaPath(value);
+  if (!normalized) return null;
+
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || null;
+}
+
+function getExternalDocumentEntries(externalDocuments) {
+  return Object.entries(externalDocuments || {}).map(([key, text]) => ({
+    key,
+    normalizedKey: normalizeSchemaPath(key),
+    basename: getSchemaPathBasename(key),
+    text,
+  }));
+}
+
+function getDeclaredTargetNamespaceFromText(xsdText) {
+  if (typeof xsdText !== "string" || !xsdText.trim()) {
+    return null;
+  }
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xsdText, "application/xml");
+    const parserError = doc.querySelector("parsererror");
+    if (parserError) return null;
+
+    const root = getSchemaRoot(doc);
+    if (!root) return null;
+
+    return root.hasAttribute("targetNamespace")
+      ? root.getAttribute("targetNamespace")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveExternalDocument(ref, externalDocuments) {
+  const entries = getExternalDocumentEntries(externalDocuments);
+  const requestedLocation = ref?.schemaLocation || null;
+  const normalizedRequestedLocation = normalizeSchemaPath(requestedLocation);
+  const requestedBasename = getSchemaPathBasename(requestedLocation);
+
+  if (requestedLocation && Object.prototype.hasOwnProperty.call(externalDocuments, requestedLocation)) {
+    return {
+      kind: "exact",
+      entry: {
+        key: requestedLocation,
+        normalizedKey: normalizedRequestedLocation,
+        basename: requestedBasename,
+        text: externalDocuments[requestedLocation],
+      },
+      matches: [],
+    };
+  }
+
+  if (normalizedRequestedLocation) {
+    const normalizedMatches = entries.filter(
+      (entry) => entry.normalizedKey === normalizedRequestedLocation,
+    );
+    if (normalizedMatches.length === 1) {
+      return {
+        kind: "normalized",
+        entry: normalizedMatches[0],
+        matches: normalizedMatches,
+      };
+    }
+  }
+
+  if (requestedBasename) {
+    const basenameMatches = entries.filter(
+      (entry) => entry.basename === requestedBasename,
+    );
+    if (basenameMatches.length === 1) {
+      return {
+        kind: "basename",
+        entry: basenameMatches[0],
+        matches: basenameMatches,
+      };
+    }
+  }
+
+  if (ref?.kind === "import" && ref.namespace) {
+    const namespaceMatches = entries.filter((entry) => {
+      const declaredTargetNamespace = getDeclaredTargetNamespaceFromText(
+        entry.text,
+      );
+      return (declaredTargetNamespace || null) === (ref.namespace || null);
+    });
+
+    if (namespaceMatches.length === 1) {
+      return {
+        kind: "namespace",
+        entry: namespaceMatches[0],
+        matches: namespaceMatches,
+      };
+    }
+
+    if (namespaceMatches.length > 1) {
+      return {
+        kind: "ambiguous-namespace",
+        entry: null,
+        matches: namespaceMatches,
+      };
+    }
+  }
+
+  return {
+    kind: "not-found",
+    entry: null,
+    matches: [],
+  };
 }
 
 export function buildSchemaModel(doc, options = {}) {
@@ -1285,16 +1408,42 @@ export function buildSchemaModel(doc, options = {}) {
   for (const ref of [...includes, ...imports]) {
     if (!ref.schemaLocation) continue;
 
+    const resolution = resolveExternalDocument(ref, externalDocuments);
+
+    if (resolution.kind === "ambiguous-namespace") {
+      issues.push(
+        createIssue({
+          code: ISSUE_CODES.XSD_IMPORT_NOT_PROVIDED,
+          severity: "error",
+          message: `Multiple provided schemas match xs:import namespace '${ref.namespace || ""}'. Unable to determine which schema to use.`,
+          line: ref.line,
+          column: ref.column,
+          path: ref.path,
+          source: "xsd",
+          nodeKind: ref.kind,
+          details: {
+            schemaLocation: ref.schemaLocation,
+            namespace: ref.namespace,
+            matchingKeys: resolution.matches.map((match) => match.key),
+          },
+        }),
+      );
+      continue;
+    }
+
+    const resolvedEntry = resolution.entry;
+    const resolvedSchemaKey = resolvedEntry?.key || ref.schemaLocation;
+
     const visitKey =
       ref.kind === "include" && schema.targetNamespace
-        ? `${ref.schemaLocation}::include::${schema.targetNamespace}`
-        : ref.schemaLocation;
+        ? `${resolvedSchemaKey}::include::${schema.targetNamespace}`
+        : resolvedSchemaKey;
 
     if (visited.has(visitKey)) {
       continue;
     }
 
-    const externalXsdText = externalDocuments[ref.schemaLocation];
+    const externalXsdText = resolvedEntry?.text || null;
     if (!externalXsdText) {
       issues.push(
         createIssue({
@@ -1353,9 +1502,6 @@ export function buildSchemaModel(doc, options = {}) {
     });
 
     if (externalBuild.schema) {
-      if (ref.kind === "import") {
-        schema.importedSchemas.push(externalBuild.schema);
-      }
       if (ref.kind === "include") {
         if (!isIncludeNamespaceCompatible(schema, externalBuild.schema)) {
           issues.push(
@@ -1370,6 +1516,8 @@ export function buildSchemaModel(doc, options = {}) {
               nodeKind: "include",
               details: {
                 schemaLocation: ref.schemaLocation,
+                resolvedSchemaKey,
+                resolutionKind: resolution.kind,
                 hostTargetNamespace: schema.targetNamespace || null,
                 includedTargetNamespace:
                   externalBuild.schema.targetNamespace || null,
@@ -1401,6 +1549,8 @@ export function buildSchemaModel(doc, options = {}) {
               nodeKind: "import",
               details: {
                 schemaLocation: ref.schemaLocation,
+                resolvedSchemaKey,
+                resolutionKind: resolution.kind,
                 declaredNamespace: ref.namespace || null,
                 importedTargetNamespace:
                   externalBuild.schema.targetNamespace || null,

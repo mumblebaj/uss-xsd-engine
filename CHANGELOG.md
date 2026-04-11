@@ -1,5 +1,107 @@
 # Changelog
 
+## [0.1.1]
+
+## Enhanced External Schema Resolution (Import/Include)
+
+### Summary
+Improved how `uss-xsd-engine` resolves external schemas referenced via `xs:import` and `xs:include`.
+
+The engine no longer relies solely on exact `schemaLocation` matching and now supports more flexible, real-world schema usage patterns.
+
+### What Changed
+#### `xs:import` Resolution Improvements
+
+External schemas are now resolved using the following priority:
+
+1. Exact `schemaLocation` match
+2. Normalized path match (handles `\` vs `/`, duplicate slashes, etc.)
+3. Filename (basename) match
+4. Namespace match (`targetNamespace`) ← ⭐ NEW
+
+This means:
+
+If the `schemaLocation` does not match exactly, the engine will attempt to resolve the schema based on its declared `targetNamespace`.
+This aligns with how `xs:import` is intended to work (namespace-driven).
+
+### Ambiguity Handling
+
+If multiple provided schemas share the same `targetNamespace`:
+
+- The engine will raise a diagnostic
+- It will not guess which schema to use
+
+### `xs:include` Behavior
+
+`xs:include` remains stricter:
+
+Exact / normalized / basename matching supported
+Namespace fallback not applied (by design)
+
+### WHY this change
+Previously, users had to match exact file paths like:
+
+```XML
+../../../../shared/.../MySchema.xsd
+```
+
+Now you can simply provide:
+
+```JavaScript
+externalDocuments = {
+  "MySchema.xsd": "...",
+}
+```
+
+...and the engine will correctly resolve imports using the namespace matching.
+
+### Example
+
+#### Before
+
+```XML
+<xs:import
+  namespace="http://example.com/schema/MySchema/1.0"
+  schemaLocation="../../../../shared/.../MySchema.xsd"/>
+```
+
+```JavaScript
+externalDocuments = {
+  "MySchema.xsd": "...",
+}
+```
+Result: Import not provided
+
+#### After
+Same input:
+
+```JavaScript
+externalDocuments = {
+  "MySchema.xsd": "...",
+}
+```
+Result: Successfully resolved via `targetNamespace`
+
+### Internal Changes
+* Enhanced resolver in buildSchemaModel.js
+* Updated diagnostics in schemaImportDiagnostics.js
+* Removed strict dependency on schemaLocation as sole lookup key
+
+### Impact
+* Works with real-world schema packs (no folder reconstruction needed)
+* Better browser-based usage (USS, etc.)
+* Standards-aligned `xs:import` handling
+* Improved developer experience
+
+### Backwards Compatibility
+* No breaking changes
+* Existing exact-path behavior still supported
+
+
+<details>
+
+<summary>Update XML Generation</summary>
+
 ## [0.1.0]
 
 ## Update XML Generation
@@ -20,6 +122,12 @@
 - Sample XML is now structurally closer to real-world payloads
 - Works reliably with deeply nested, multi-import XSDs
 - Provides a stronger baseline for further manual or UI-driven expansion
+
+</details>
+
+<details>
+
+<summary>Fix: Imported schea `targetNamespace` incorrectly resolved as empty</summary>
 
 ## [0.1.0-rc.2]
 
@@ -197,6 +305,11 @@ validateXml(xsdText, xmlText, options)
 ```
 Always pass the same `externalDocuments`
 
+</details>
+
+<details>
+
+<summary>Release Candidate</summary>
 
 ## [0.1.0-rc.1]
 
@@ -255,6 +368,12 @@ Early feedback is welcome — especially around:
 - large/complex schemas
 - namespace-heavy use cases
 - performance observations
+
+</details>
+
+<details>
+
+<summary>XML Validation Correctness and Sample Generation</summary>
 
 ## [0.1.0-beta.5]
 
@@ -352,6 +471,8 @@ Key improvements:
   * generator
 
 ---
+
+</details>
 
 <details>
 

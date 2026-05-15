@@ -11,6 +11,7 @@ import {
 import { runFacetDiagnostics } from "./schemaFacetDiagnostics.js";      
 import { runRestrictionDiagnostics } from "./schemaRestrictionDiagnostics.js";
 import { runDefaultFixedDiagnostics } from "./schemaDefaultFixedDiagnostics.js";
+import { runIdentityConstraintDiagnostics } from "./schemaIdentityConstraintDiagnostics.js";
 import { runImportDiagnostics } from "./schemaImportDiagnostics.js";
 
 function buildStats(schema) {
@@ -42,11 +43,14 @@ function getSupportedFeatures(schema) {
           "element",
           "extension",
           "group",
+          "key",
+          "keyref",
           "restriction",
           "schema",
           "sequence",
           "simpleContent",
-          "simpleType"
+          "simpleType",
+          "unique"
         ].includes(name)
       )
       .map((name) => `xs:${name}`)
@@ -204,6 +208,8 @@ export function runSchemaDiagnostics(schema, options = {}) {
   checkMissingBaseTypes(schema, issues);
   checkUnknownGroups(schema, issues);
   checkUnknownAttributeGroups(schema, issues);
+  const identityIssues = runIdentityConstraintDiagnostics(schema);
+  issues.push(...identityIssues);
   emitUnsupportedFeatureWarnings(schema, issues, options);
 
   const facetIssues = runFacetDiagnostics(schema, options);

@@ -11,6 +11,10 @@ The engine now validates identity constraints at both schema-definition time and
 
 ### What Changed
 
+#### Playground & Version Fixes
+- Added a cache-busting bundle loader to `playground.html` so the browser always loads the latest `dist/uss-xsd-engine.standalone.js` build.
+- Updated runtime engine version propagation to match `package.json` v0.2.0.
+
 #### Identity Constraint Types
 Full support for three constraint categories:
 

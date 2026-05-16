@@ -212,12 +212,12 @@
         </div>
       </div>
     </div>
-    <script src="./dist/uss-xsd-engine.standalone.js"></script>
     <script>
-      const {
-        getSchemaDiagnostics,
-        extractSchemaTree,
-        generateSampleXml,
+      function initializePlayground() {
+        const {
+          getSchemaDiagnostics,
+          extractSchemaTree,
+          generateSampleXml,
         validateXml
       } = window.UssXsdEngine;
 
@@ -2001,6 +2001,17 @@ xml: `<note lang="en">Hello<child/></note>`
       runTreeBtn.addEventListener("click", runTreeExtraction);
       runSampleBtn.addEventListener("click", runSampleGeneration);
       runValidateXmlBtn.addEventListener("click", runXmlValidation);
+    }
+    </script>
+    <script>
+      const cacheBuster = Date.now();
+      const engineScript = document.createElement("script");
+      engineScript.src = `./dist/uss-xsd-engine.standalone.js?cb=${cacheBuster}`;
+      engineScript.onload = initializePlayground;
+      engineScript.onerror = () => {
+        console.error("Failed to load uss-xsd-engine bundle");
+      };
+      document.head.appendChild(engineScript);
     </script>
   </body>
 </html>

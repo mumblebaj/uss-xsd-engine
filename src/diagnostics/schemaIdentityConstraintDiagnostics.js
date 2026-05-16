@@ -7,9 +7,24 @@ function isValidConstraintXPath(xpath) {
 
   const trimmed = xpath.trim();
   if (!trimmed) return false;
-  if (trimmed.includes("//")) return false;
+  // Allow descendant operator '//' and leading './' shorthand used commonly
+  // Normalize leading './' then ensure there are no absolute paths or '///' sequences
+  let normalized = trimmed;
+  if (trimmed.startsWith("./")) {
+    // Preserve leading '//' when using the common './/' shorthand
+    if (trimmed.startsWith(".//")) normalized = trimmed.slice(1); // './/a' -> '//a'
+    else normalized = trimmed.slice(2); // './a' -> 'a'
+  }
+  if (normalized.startsWith("/") && !normalized.startsWith("//")) return false; // absolute single-slash paths not allowed
+  if (normalized.includes("///")) return false; // too many consecutive slashes
 
-  const segments = trimmed.split("/");
+  // Split on one or more slashes to collapse '//' into a single delimiter for validation
+  let segments = normalized.split(/\/+/
+  );
+  // If path starts with '//' the split produces a leading empty segment — drop it
+  if (normalized.startsWith("//")) segments = segments.slice(1);
+  // If path ends with '//' drop trailing empty segment
+  if (normalized.endsWith("//")) segments = segments.slice(0, -1);
   if (segments.some((segment) => segment.length === 0)) return false;
 
   for (const segment of segments) {

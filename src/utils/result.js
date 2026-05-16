@@ -1,4 +1,4 @@
-import { ENGINE_VERSION } from "../version";
+import { ENGINE_VERSION } from "../version.js";
 
 export function summarizeIssues(issues = []) {
   return issues.reduce(

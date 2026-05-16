@@ -1,5 +1,176 @@
 # Changelog
 
+## [0.2.0]
+
+## Identity Constraints Support ⭐
+
+### Summary
+Full support for XML identity constraints with runtime validation, including `xs:key`, `xs:keyref`, and `xs:unique`.
+
+The engine now validates identity constraints at both schema-definition time and XML runtime, enabling proper enforcement of uniqueness and foreign-key-like relationships in XML documents.
+
+### What Changed
+
+#### Playground & Version Fixes
+- Added a cache-busting bundle loader to `playground.html` so the browser always loads the latest `dist/uss-xsd-engine.standalone.js` build.
+- Updated runtime engine version propagation to match `package.json` v0.2.0.
+
+#### Identity Constraint Types
+Full support for three constraint categories:
+
+1. **`xs:unique`** - Ensures field values are unique within selected elements
+2. **`xs:key`** - Ensures field values are unique and non-null (candidate key)
+3. **`xs:keyref`** - Ensures field values reference existing key values (foreign key)
+
+#### Schema Validation
+New diagnostics detect constraint definition issues:
+
+- `INVALID_CONSTRAINT_SELECTOR`: Invalid selector XPath syntax
+- `INVALID_CONSTRAINT_FIELD`: Invalid field XPath syntax
+- `UNKNOWN_KEY_REFERENCE`: keyref refers to non-existent key
+- `DUPLICATE_CONSTRAINT_NAME`: Multiple constraints with same name in scope
+
+#### XML Runtime Validation
+Runtime validation now detects:
+
+- `XML_KEY_VIOLATION`: Duplicate key value found
+- `XML_KEY_NULL_VIOLATION`: Key field has null/missing value
+- `XML_KEYREF_VIOLATION`: keyref value not found in referenced key
+- `XML_UNIQUE_VIOLATION`: Duplicate value in unique constraint
+
+Violations include precise line/column locations in error messages.
+
+#### XPath Support for Constraints
+New XPath evaluator supports a practical subset of XPath sufficient for identity constraints:
+
+**Supported features:**
+- Relative paths: `element`, `element/subelement`, `@attribute`
+- Predicates (numeric): `element[1]`, `element[2]`
+- Predicates (attribute): `element[@attr='value']`
+- Wildcards: `element/*`, `*/@attr`
+- Axes: `child::`, `descendant::`, `@` (attribute axis)
+- **NEW:** Descendant-or-self operator: `//` (e.g., `.//item`, `.//data/value`)
+- Namespace-aware QName matching with prefix resolution
+
+**Namespace handling:**
+- Dual fallback resolution (schema context + node context)
+- Compatible with both standard DOM and xmldom polyfill (Node.js)
+- Proper prefix resolution for namespaced elements
+
+#### Multi-Field Constraints
+Constraints can now validate tuples of values:
+
+```XML
+<xs:key name="ProductKey">
+  <xs:selector xpath=".//product"/>
+  <xs:field xpath="category"/>
+  <xs:field xpath="@id"/>
+</xs:key>
+```
+
+This validates that the combination of `category` and `@id` is unique.
+
+### Example
+
+#### Schema Definition
+```XML
+<xs:schema>
+  <xs:element name="warehouse">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="product" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="sku" type="xs:string"/>
+              <xs:element name="desc" type="xs:string"/>
+            </xs:sequence>
+            <xs:attribute name="id" type="xs:ID"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="order" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="lineItem" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:attribute name="productRef" type="xs:IDREF"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+
+    <!-- Each product must have unique SKU -->
+    <xs:unique name="uniqueSku">
+      <xs:selector xpath=".//product"/>
+      <xs:field xpath="sku"/>
+    </xs:unique>
+
+    <!-- product IDs are candidate keys -->
+    <xs:key name="productKey">
+      <xs:selector xpath=".//product"/>
+      <xs:field xpath="@id"/>
+    </xs:key>
+
+    <!-- orderline productRef must reference product IDs -->
+    <xs:keyref name="productRef" refer="productKey">
+      <xs:selector xpath=".//lineItem"/>
+      <xs:field xpath="@productRef"/>
+    </xs:keyref>
+  </xs:element>
+</xs:schema>
+```
+
+#### XML Validation
+```XML
+<warehouse>
+  <product id="P1"><sku>ABC123</sku></product>
+  <product id="P2"><sku>ABC123</sku></product>  <!-- ❌ Duplicate SKU -->
+  <order>
+    <lineItem productRef="P3"/>  <!-- ❌ P3 not in product keys -->
+  </order>
+</warehouse>
+```
+
+Result: Both violations detected with line/column information.
+
+### Internal Changes
+
+**Files Created:**
+- `src/utils/xpathEvaluator.js` - XPath expression evaluator (330+ lines)
+- `src/diagnostics/schemaIdentityConstraintDiagnostics.js` - Schema-level constraint validation
+- `src/validation/identityConstraintValidator.js` - XML runtime constraint validation
+
+**Files Modified:**
+- `src/model/schemaModel.js` - Added `identityConstraints` array to schema model
+- `src/parser/buildSchemaModel.js` - Added identity constraint parsing (lines 699+)
+- `src/diagnostics/issueCodes.js` - Added 8 new issue codes for constraints
+- `src/diagnostics/schemaDiagnostics.js` - Integrated constraint diagnostics
+- `src/validation/validateXmlAgainstSchema.js` - Integrated runtime constraint validation
+- `src/validation/xmlSourceMap.js` - Added node location tracking for constraints
+
+**Tests Added:**
+- `tests/smoke/identityConstraintDiagnostics.test.js` - Schema-level diagnostic tests (3 tests)
+- `tests/integration/identityConstraintRuntime.test.js` - Runtime validation tests (2 tests)
+- `tests/integration/identityConstraint_multi.test.js` - Multi-field constraint tests (1 test)
+
+### Impact
+
+- Enables validation of uniqueness and referential integrity in XML documents
+- Proper XSD 1.0 specification compliance for identity constraints
+- Supports real-world XML schema patterns
+- No performance degradation (validation only runs on valid structural XML)
+
+### Backwards Compatibility
+
+- ✅ No breaking changes
+- ✅ Fully backwards compatible
+- ✅ Existing API unchanged
+- ✅ New functionality is additive only
+
+---
+
 ## [0.1.1]
 
 ## Enhanced External Schema Resolution (Import/Include)

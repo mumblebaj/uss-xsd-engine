@@ -29,6 +29,8 @@ export function createEmptySchemaModel() {
 
     roots: [],
 
+    identityConstraints: [],
+
     references: {
       types: [],
       refs: [],
@@ -75,6 +77,7 @@ export function createElementDecl({
   defaultValue = null,
   fixedValue = null,
   nillable = false,
+  identityConstraints = [],
   line = null,
   column = null,
   path = null
@@ -92,6 +95,7 @@ export function createElementDecl({
     defaultValue,
     fixedValue,
     nillable,
+    identityConstraints,
     line,
     column,
     path
@@ -139,6 +143,7 @@ export function createComplexTypeDecl({
   contentModel = "complex",
   mixed = false,
   abstract = false,
+  identityConstraints = [],
   line = null,
   column = null,
   path = null
@@ -154,6 +159,7 @@ export function createComplexTypeDecl({
     contentModel,
     mixed,
     abstract,
+    identityConstraints,
     line,
     column,
     path
@@ -236,6 +242,38 @@ export function createAttributeGroupRef({
   return {
     kind: "attributeGroupRef",
     refName,
+    line,
+    column,
+    path
+  };
+}
+
+export function createIdentityConstraint({
+  kind = null,
+  name = null,
+  qName = null,
+  namespaceUri = null,
+  selector = null,
+  fields = [],
+  refer = null,
+  ownerName = null,
+  ownerNamespaceUri = null,
+  ownerPath = null,
+  line = null,
+  column = null,
+  path = null
+} = {}) {
+  return {
+    kind,
+    name,
+    qName,
+    namespaceUri,
+    selector,
+    fields,
+    refer,
+    ownerName,
+    ownerNamespaceUri,
+    ownerPath,
     line,
     column,
     path

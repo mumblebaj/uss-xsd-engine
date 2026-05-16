@@ -10,6 +10,7 @@ import {
   createEmptySchemaModel,
   createGroupDecl,
   createGroupRefNode,
+  createIdentityConstraint,
   createSequenceNode,
   createSimpleTypeDecl,
   normalizeOccurs,
@@ -24,9 +25,6 @@ import {
 } from "../resolver/schemaResolvers.js";
 
 const UNSUPPORTED_NODE_FEATURES = new Set([
-  "key",
-  "keyref",
-  "unique",
   "any",
   "anyAttribute",
   "redefine",
@@ -104,6 +102,9 @@ function mergeGlobalsIntoSchema(
   );
 
   targetSchema.importedSchemas.push(...(sourceSchema.importedSchemas || []));
+  targetSchema.identityConstraints.push(
+    ...(sourceSchema.identityConstraints || []),
+  );
 
   for (const feature of sourceSchema.usedFeatures || []) {
     targetSchema.usedFeatures.add(feature);
@@ -625,6 +626,24 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
   const qName = node.getAttribute("name");
   const namespaceUri = getDeclarationNamespaceUri(schema, node, "element");
 
+  const identityConstraints = children
+    .filter((child) =>
+      ["key", "keyref", "unique"].includes(child.localName),
+    )
+    .map((child) =>
+      parseIdentityConstraint(
+        child,
+        xsdText,
+        lineStarts,
+        path,
+        schema,
+        issues,
+        qName ? parseQName(qName).localName : null,
+        namespaceUri,
+        path,
+      ),
+    );
+
   return createElementDecl({
     name: qName ? parseQName(qName).localName : null,
     qName,
@@ -637,6 +656,7 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
     defaultValue: node.getAttribute("default"),
     fixedValue: node.getAttribute("fixed"),
     nillable: node.getAttribute("nillable") === "true",
+    identityConstraints,
     line: loc.line,
     column: loc.column,
     path,
@@ -674,6 +694,56 @@ function parseAny(node, xsdText, lineStarts, parentPath, schema, issues) {
     column: loc.column,
     path,
   });
+}
+
+function parseIdentityConstraint(node, xsdText, lineStarts, parentPath, schema, issues, ownerName, ownerNamespaceUri, ownerPath) {
+  const path = buildPath(parentPath, node);
+  const loc = locateNodeInSource(xsdText, lineStarts, node);
+
+  collectNodeDiagnostics(schema, issues, node, path, loc);
+
+  const selectorNode = elementChildren(node).find(
+    (child) => child.localName === "selector",
+  );
+  const selector = selectorNode
+    ? {
+        xpath: selectorNode.getAttribute("xpath"),
+        path: buildPath(path, selectorNode),
+      }
+    : null;
+
+  const fields = elementChildren(node)
+    .filter((child) => child.localName === "field")
+    .map((child) => ({
+      xpath: child.getAttribute("xpath"),
+      line: locateNodeInSource(xsdText, lineStarts, child).line,
+      column: locateNodeInSource(xsdText, lineStarts, child).column,
+      path: buildPath(path, child),
+    }))
+    .filter((field) => field.xpath != null);
+
+  const qName = node.getAttribute("name");
+  const name = qName ? parseQName(qName).localName : null;
+  const namespaceUri = ownerNamespaceUri || schema.targetNamespace || null;
+
+  const constraint = createIdentityConstraint({
+    kind: node.localName,
+    name,
+    qName,
+    namespaceUri,
+    selector,
+    fields,
+    refer: node.getAttribute("refer"),
+    ownerName,
+    ownerNamespaceUri,
+    ownerPath,
+    line: loc.line,
+    column: loc.column,
+    path,
+  });
+
+  schema.identityConstraints.push(constraint);
+  return constraint;
 }
 
 function parseContentNode(
@@ -873,6 +943,25 @@ function parseComplexType(
   let contentModel = "complex";
 
   const children = elementChildren(node);
+  const namespaceUri = schema.targetNamespace || null;
+
+  const identityConstraints = children
+    .filter((child) =>
+      ["key", "keyref", "unique"].includes(child.localName),
+    )
+    .map((child) =>
+      parseIdentityConstraint(
+        child,
+        xsdText,
+        lineStarts,
+        path,
+        schema,
+        issues,
+        null,
+        namespaceUri,
+        path,
+      ),
+    );
 
   const directContentNode = children.find((child) =>
     ["sequence", "choice", "all", "group", "element", "any"].includes(
@@ -944,7 +1033,6 @@ function parseComplexType(
   }
 
   const qName = node.getAttribute("name");
-  const namespaceUri = schema.targetNamespace || null;
 
   return createComplexTypeDecl({
     name: qName ? parseQName(qName).localName : null,
@@ -956,6 +1044,7 @@ function parseComplexType(
     contentModel,
     mixed: node.getAttribute("mixed") === "true",
     abstract: node.getAttribute("abstract") === "true",
+    identityConstraints,
     line: loc.line,
     column: loc.column,
     path,

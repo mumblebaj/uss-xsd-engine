@@ -10,6 +10,7 @@ import {
   validateAttributes,
   validateContentModel,
 } from "./structureValidator.js";
+import { validateIdentityConstraints } from "./identityConstraintValidator.js";
 import {
   validateElementValue,
   validateAttributeValue,
@@ -399,6 +400,13 @@ export function validateXmlAgainstSchema(
       );
     }
   }
+
+  const identityConstraintIssues = validateIdentityConstraints(
+    schema,
+    xmlRoot,
+    locator.getNodeLocation,
+  );
+  issues.push(...identityConstraintIssues);
 
   return {
     data: {

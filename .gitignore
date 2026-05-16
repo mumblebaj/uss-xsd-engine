@@ -7,3 +7,6 @@ Thumbs.db
 .vscode/
 .ideal/
 *.tgz
+tests/
+API_DOCUMENTATION.md
+UPGRADE_PLAN.md

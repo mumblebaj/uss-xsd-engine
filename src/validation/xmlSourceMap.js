@@ -171,10 +171,21 @@ export function createXmlSourceLocator(xmlText, xmlDocument) {
     };
   }
 
-  const orderedNodes = [
-    documentElement,
-    ...Array.from(documentElement.querySelectorAll("*"))
-  ];
+  let orderedNodes = null;
+  if (typeof documentElement.querySelectorAll === "function") {
+    orderedNodes = [documentElement, ...Array.from(documentElement.querySelectorAll("*"))];
+  } else {
+    // Fallback traversal for DOM implementations without querySelectorAll (e.g., xmldom)
+    orderedNodes = [];
+    function collect(node) {
+      if (!node || node.nodeType !== 1) return;
+      orderedNodes.push(node);
+      for (const child of Array.from(node.children || [])) {
+        collect(child);
+      }
+    }
+    collect(documentElement);
+  }
 
   let searchFrom = 0;
 

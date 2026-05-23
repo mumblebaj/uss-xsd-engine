@@ -8,5 +8,4 @@ Thumbs.db
 .ideal/
 *.tgz
 tests/
-API_DOCUMENTATION.md
 UPGRADE_PLAN.md

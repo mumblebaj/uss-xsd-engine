@@ -16,6 +16,10 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 
 ---
 
+> 📄 API Documentation: See full details in [API DOCUMENTATION](https://github.com/mumblebaj/uss-xsd-engine/blob/main/API_DOCUMENTATION.md)
+
+---
+
 ## 🚀 Overview
 
 `uss-xsd-engine` is a standalone JavaScript engine designed to process XML Schema (XSD) directly in the browser.

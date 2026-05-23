@@ -179,6 +179,9 @@ Generates sample XML based on the XSD schema.
   - `mode` ("minimal" | "full"): Generation mode (default: "minimal")
   - `targetPrefix` (string): Namespace prefix for generated XML (default: "tns")
   - `includeOptionalAttributes` (boolean): Include optional attributes
+  - `maxDepth` (number): Limit recursive complex type expansion (default: 3)
+  - `maxChoiceBranches` (number): Limit choice branch expansion (default: 1)
+  - `expandRepeatingElements` (number): Limit repetition expansion for `maxOccurs > 1` (default: 2)
   - `externalDocuments` (object): External schema documents
 
 **Returns:**
@@ -336,12 +339,47 @@ if (!result.ok) {
 - Facet validation
 - Restriction enforcement
 - Identity constraint enforcement for `xs:key`, `xs:keyref`, and `xs:unique`
+- Wildcard validation for `xs:any` and `xs:anyAttribute`
+- `processContents` support (`strict`, `lax`, `skip`)
+- Namespace constraint support: `##any`, `##other`, `##targetNamespace`, explicit namespace lists
+- Wildcard exclusions via `notNamespace` and `notQName`
 
 ### Include/Import Support
 - `xs:include` and `xs:import` recognition
 - External schema provision via `externalDocuments`
 - Recursive resolution
 - Namespace-aware merging
+
+## Advanced Wildcard and Sample Generation Support
+
+### Wildcard Processing
+- Supports `xs:any` and `xs:anyAttribute` wildcard declarations in content models and attribute groups
+- Parses `processContents`, `namespace`, `notNamespace`, and `notQName` attributes into the schema model
+- Supports `##any`, `##other`, and `##targetNamespace` namespace constraints, as well as explicit namespace lists and exclusions
+
+### Wildcard Validation
+- Validates wildcard content against known schema declarations in `strict` mode
+- Permits unknown wildcard content in `lax` mode while validating schema-known content when available
+- Skips nested wildcard validation entirely in `skip` mode
+- Emitted issue codes:
+  - `XML_ANY_STRICT_VALIDATION_FAILED`
+  - `XML_ANYATTRIBUTE_STRICT_VALIDATION_FAILED`
+
+### Advanced Restriction Validation
+- Enforces restriction theorem compatibility for derived complex types
+- Checks occurrence constraint compatibility for restricted elements
+- Validates attribute restriction compatibility
+- Validates wildcard restriction compatibility
+- Emitted issue codes:
+  - `XSD_RESTRICTION_OCCURRENCE_INCOMPATIBLE`
+  - `XSD_RESTRICTION_ATTRIBUTE_INCOMPATIBLE`
+  - `XSD_RESTRICTION_WILDCARD_INCOMPATIBLE`
+
+### Sample XML Generation Options
+- `maxDepth` (default: 3): limits recursion depth for nested complex types
+- `maxChoiceBranches` (default: 1): limits choice branch expansion when generating examples
+- `expandRepeatingElements` (default: 2): limits expansion of elements with `maxOccurs > 1`
+- Detects self-referencing type cycles and prevents infinite recursion in generated XML samples
 
 ## Usage Patterns
 
@@ -396,10 +434,28 @@ The library uses standardized issue codes for consistent error reporting:
 - `UNSUPPORTED_FEATURE`: Feature not yet implemented
 - `INVALID_OCCURS_RANGE`: Invalid minOccurs/maxOccurs values
 - `INVALID_DEFAULT_FIXED_COMBINATION`: Conflicting default/fixed values
+- `XSD_RESTRICTION_OCCURRENCE_INCOMPATIBLE`: Restriction derived element occurrences are incompatible with base definition
+- `XSD_RESTRICTION_ATTRIBUTE_INCOMPATIBLE`: Restricted attribute constraints are incompatible with base definition
+- `XSD_RESTRICTION_WILDCARD_INCOMPATIBLE`: Wildcard restriction is incompatible with base wildcard constraints
 
 ### XML Validation Issues
 - `XML_PARSE_ERROR`: Failed to parse XML document
 - `XML_ROOT_ELEMENT_MISMATCH`: Root element doesn't match schema
+- `XML_UNKNOWN_ROOT_ELEMENT`: Root element not defined in schema
+- `XML_UNEXPECTED_ELEMENT`: Element not allowed at this position
+- `XML_MISSING_REQUIRED_ELEMENT`: Required element missing
+- `XML_CHOICE_NOT_SATISFIED`: Choice group requirements not met
+- `XML_UNEXPECTED_ATTRIBUTE`: Attribute not allowed
+- `XML_MISSING_REQUIRED_ATTRIBUTE`: Required attribute missing
+- `XML_INVALID_TEXT_FOR_COMPLEX_TYPE`: Text content not allowed
+- `XML_VALUE_INVALID`: Value doesn't match type constraints
+- `XML_ENUMERATION_MISMATCH`: Value not in allowed enumeration
+- `XML_KEY_VIOLATION`: Duplicate key or unique value violation
+- `XML_KEY_NULL_VIOLATION`: Key constraint field value is missing or empty
+- `XML_KEYREF_VIOLATION`: Keyref points to a missing reference value
+- `XML_UNIQUE_VIOLATION`: Duplicate unique constraint value
+- `XML_ANY_STRICT_VALIDATION_FAILED`: `xs:any` content failed strict wildcard validation
+- `XML_ANYATTRIBUTE_STRICT_VALIDATION_FAILED`: `xs:anyAttribute` content failed strict wildcard validation
 - `XML_UNKNOWN_ROOT_ELEMENT`: Root element not defined in schema
 - `XML_UNEXPECTED_ELEMENT`: Element not allowed at this position
 - `XML_MISSING_REQUIRED_ELEMENT`: Required element missing

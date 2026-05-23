@@ -13,6 +13,7 @@ import { runRestrictionDiagnostics } from "./schemaRestrictionDiagnostics.js";
 import { runDefaultFixedDiagnostics } from "./schemaDefaultFixedDiagnostics.js";
 import { runIdentityConstraintDiagnostics } from "./schemaIdentityConstraintDiagnostics.js";
 import { runImportDiagnostics } from "./schemaImportDiagnostics.js";
+import { runWildcardDiagnostics } from "./schemaWildcardDiagnostics.js";
 
 function buildStats(schema) {
   return {
@@ -211,6 +212,9 @@ export function runSchemaDiagnostics(schema, options = {}) {
   const identityIssues = runIdentityConstraintDiagnostics(schema);
   issues.push(...identityIssues);
   emitUnsupportedFeatureWarnings(schema, issues, options);
+
+  const wildcardIssues = runWildcardDiagnostics(schema);
+  issues.push(...wildcardIssues);
 
   const facetIssues = runFacetDiagnostics(schema, options);
   issues.push(...facetIssues);

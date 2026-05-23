@@ -266,6 +266,32 @@ function buildComplexTypeContent(schema, complexTypeDecl, options, state) {
   const content = getEffectiveContent(schema, complexTypeDecl);
   const attributes = getEffectiveAttributes(schema, complexTypeDecl);
 
+  // Check depth limit and cycle detection
+  if (state.currentDepth >= options.maxDepth) {
+    return {
+      attributes: buildAttributesObject(schema, attributes, options, state),
+      children: [],
+    };
+  }
+
+  // Check for circular reference (cycle detection)
+  const typeKey = complexTypeDecl.name || complexTypeDecl.qName;
+  if (typeKey && state.visitedTypes.has(typeKey)) {
+    return {
+      attributes: buildAttributesObject(schema, attributes, options, state),
+      children: [],
+    };
+  }
+
+  // Mark type as visited to detect cycles
+  if (typeKey) {
+    state.visitedTypes.add(typeKey);
+  }
+
+  // Increment depth for children
+  const previousDepth = state.currentDepth;
+  state.currentDepth += 1;
+
   let children = content
     ? buildNodesFromContent(schema, content, options, state)
     : [];
@@ -281,6 +307,12 @@ function buildComplexTypeContent(schema, complexTypeDecl, options, state) {
       options,
       state,
     );
+  }
+
+  // Restore depth and remove type from visited set for sibling processing
+  state.currentDepth = previousDepth;
+  if (typeKey) {
+    state.visitedTypes.delete(typeKey);
   }
 
   return {
@@ -403,6 +435,9 @@ export function generateXmlFromSchema(schema, options = {}, helpers = {}) {
   const normalizedOptions = {
     mode: options.mode === "full" ? "full" : "minimal",
     includeOptionalAttributes: options.includeOptionalAttributes === true,
+    maxDepth: options.maxDepth ?? 3,
+    maxChoiceBranches: options.maxChoiceBranches ?? 1,
+    expandRepeatingElements: options.expandRepeatingElements ?? 2,
   };
 
   const root = selectRoot(schema, options);
@@ -419,25 +454,27 @@ export function generateXmlFromSchema(schema, options = {}, helpers = {}) {
     resolveAttributeGroup: helpers.resolveAttributeGroup,
     targetPrefix: options.targetPrefix || "tns",
     nsContext,
+    visitedTypes: new Set(),
+    currentDepth: 0,
   };
 
-const [rootNode] = buildElementInstances(
-  schema,
-  root,
-  normalizedOptions,
-  state,
-  true,
-);
+  const [rootNode] = buildElementInstances(
+    schema,
+    root,
+    normalizedOptions,
+    state,
+    true,
+  );
 
-// 🔥 PATCH: rebuild root xmlns AFTER full traversal
-if (rootNode) {
-  const finalNsAttrs = buildRootNamespaceAttributes(schema, root, state);
+  // 🔥 PATCH: rebuild root xmlns AFTER full traversal
+  if (rootNode) {
+    const finalNsAttrs = buildRootNamespaceAttributes(schema, root, state);
 
-  rootNode.attributes = {
-    ...finalNsAttrs,
-    ...rootNode.attributes, // preserve any existing attrs
-  };
-}
+    rootNode.attributes = {
+      ...finalNsAttrs,
+      ...rootNode.attributes, // preserve any existing attrs
+    };
+  }
 
   return {
     rootElementName: root.name,

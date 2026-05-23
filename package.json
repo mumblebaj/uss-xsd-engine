@@ -1,6 +1,6 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "dist/uss-xsd-engine.esm.js",

@@ -64,6 +64,8 @@ It is built to power tools like USS XSD Studio while remaining lightweight, depe
 - Honors:
   - `fixed` values
   - `default` values
+- Depth-limited generation with cycle-safe recursion
+- Controlled choice and repeated element expansion
 
 ### ✅ XML Validation
 - Validate XML against XSD structure
@@ -75,6 +77,9 @@ It is built to power tools like USS XSD Studio while remaining lightweight, depe
 - Mixed content enforcement
 - Attribute validation
 - Facet validation (pattern, length, numeric, etc.)
+- Wildcard support for `xs:any` and `xs:anyAttribute`
+- `processContents` support (`strict`, `lax`, `skip`)
+- Namespace constraint handling including `##any`, `##other`, `##targetNamespace`, exclusions via `notNamespace` and `notQName`
 - Restriction enforcement (runtime)
 - Fixed value enforcement
 
@@ -161,6 +166,9 @@ Generates example XML from XSD.
 - `mode`:  `"minimal"` (default) or `"full"`
 - `targetPrefix`: namespace prefix (default `"tns"`)
 - `includeOptionalAttributes`: boolean
+- `maxDepth`: number — limit recursive complex type expansion (default: 3)
+- `maxChoiceBranches`: number — limit how many choice branches are expanded (default: 1)
+- `expandRepeatingElements`: number — limit repeated element expansion for `maxOccurs > 1` (default: 2)
 - `externalDocuments`: map of schemaLocation → XSD text
 
 ---

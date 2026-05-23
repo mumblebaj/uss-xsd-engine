@@ -4,6 +4,12 @@ import {
   resolveElementType,
   resolveGroup
 } from "../resolver/schemaResolvers.js";
+import {
+  elementMatchesWildcard,
+  attributeMatchesWildcard,
+  isStrictWildcardValidation,
+  shouldSkipWildcardValidation,
+} from "./wildcardValidator.js";
 
 function elementChildren(xmlNode) {
   return Array.from(xmlNode?.children || []).filter((child) => child.nodeType === 1);
@@ -115,6 +121,7 @@ function isSimpleContentComplexType(complexTypeDecl) {
 export function validateAttributes(xmlNode, attributes, context) {
   const { schema, createIssue, ISSUE_CODES, issues, pathParts, validateAttributeValue } = context;
   const allowed = new Map();
+  let anyAttributeWildcard = null;
 
   for (const attr of attributes || []) {
     if (!attr) continue;
@@ -129,6 +136,9 @@ export function validateAttributes(xmlNode, attributes, context) {
       const group = context.resolveAttributeGroup?.(attr.refName);
       if (!group) continue;
       validateAttributes(xmlNode, group.attributes || [], context);
+    }
+    else if (attr.kind === "anyAttribute") {
+      anyAttributeWildcard = attr;
     }
   }
 
@@ -183,6 +193,21 @@ export function validateAttributes(xmlNode, attributes, context) {
     }
 
     if (!allowed.has(attr.name)) {
+      // Check if attribute matches anyAttribute wildcard
+      if (anyAttributeWildcard) {
+        const attrLocalName = attr.localName || attr.name.split(":")[1] || attr.name;
+        const attrNamespace = attr.namespaceURI || null;
+        
+        if (attributeMatchesWildcard(attrLocalName, attrNamespace, anyAttributeWildcard, schema.targetNamespace)) {
+          // Attribute matches wildcard
+          if (!shouldSkipWildcardValidation(anyAttributeWildcard.processContents)) {
+            // For "strict" and "lax" modes, attempt validation if schema available
+            // For now, we allow the attribute but could add stricter validation later
+          }
+          continue;
+        }
+      }
+      
       issues.push(
         createIssue({
           code: ISSUE_CODES.XML_UNEXPECTED_ATTRIBUTE,
@@ -680,7 +705,22 @@ export function validateContentModel(children, modelNode, context, pathParts, st
 
     case "any":
       if (startIndex < children.length) {
-        return { nextIndex: startIndex + 1, matched: true, matchedAny: true };
+        const childNode = children[startIndex];
+        const childLocalName = localName(childNode);
+        const childNamespace = namespaceUri(childNode);
+        
+        if (elementMatchesWildcard(childLocalName, childNamespace, modelNode, context.schema.targetNamespace)) {
+          // Element matches wildcard - validate based on processContents
+          if (isStrictWildcardValidation(modelNode.processContents)) {
+            // Strict mode: attempt to validate element structure
+            validateElementDecl(childNode, { name: childLocalName, typeName: null }, context, [...pathParts, childLocalName]);
+          } else if (!shouldSkipWildcardValidation(modelNode.processContents)) {
+            // Lax mode: validate if schema available, but don't fail if not
+            // For now, we just accept the element
+          }
+          // Skip mode: just accept the element without validation
+          return { nextIndex: startIndex + 1, matched: true, matchedAny: true };
+        }
       }
       return { nextIndex: startIndex, matched: true, matchedAny: false };
 

@@ -358,9 +358,11 @@ export function createGroupRefNode({
 
 export function createAnyNode({
   namespace = null,
-  processContents = null,
+  processContents = "strict",
   minOccurs = 1,
   maxOccurs = 1,
+  notNamespace = [],
+  notQName = [],
   line = null,
   column = null,
   path = null
@@ -368,9 +370,32 @@ export function createAnyNode({
   return {
     kind: "any",
     namespace,
-    processContents,
+    processContents: processContents || "strict",
     minOccurs,
     maxOccurs,
+    notNamespace,
+    notQName,
+    line,
+    column,
+    path
+  };
+}
+
+export function createAnyAttributeNode({
+  namespace = null,
+  processContents = "strict",
+  notNamespace = [],
+  notQName = [],
+  line = null,
+  column = null,
+  path = null
+} = {}) {
+  return {
+    kind: "anyAttribute",
+    namespace,
+    processContents: processContents || "strict",
+    notNamespace,
+    notQName,
     line,
     column,
     path

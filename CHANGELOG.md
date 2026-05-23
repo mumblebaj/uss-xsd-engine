@@ -1,11 +1,15 @@
 # Changelog
 
-## [0.2.1]
+## [0.2.1] - 2026-05-23
 
 ## Advanced Wildcards, Restriction Validation, and Sample Generation ⭐
 
 ### Summary
 Expanded XSD support for wildcard declarations, stricter validation modes, richer restriction compatibility checks, and depth-controlled sample XML generation.
+
+### Release Notes
+- Published release branch `v2.1`
+- Tagged version `v0.2.1`
 
 This release brings advanced `xs:any` / `xs:anyAttribute` support with `processContents`, namespace constraints, exclusion handling, and improved sample generation for recursive complex types.
 

@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.2.1] - 2026-05-23
+
+## Advanced Wildcards, Restriction Validation, and Sample Generation ⭐
+
+### Summary
+Expanded XSD support for wildcard declarations, stricter validation modes, richer restriction compatibility checks, and depth-controlled sample XML generation.
+
+### Release Notes
+- Published release branch `v2.1`
+- Tagged version `v0.2.1`
+
+This release brings advanced `xs:any` / `xs:anyAttribute` support with `processContents`, namespace constraints, exclusion handling, and improved sample generation for recursive complex types.
+
+### What Changed
+
+#### Wildcard Support
+- Added support for `xs:any` and `xs:anyAttribute` in schema parsing and validation
+- Supported `processContents` values: `strict`, `lax`, `skip`
+- Supported namespace constraints: `##any`, `##other`, `##targetNamespace`, explicit namespace lists
+- Added wildcard exclusions via `notNamespace` and `notQName`
+- Added strict wildcard diagnostics for elements and attributes
+
+#### Restriction Validation Enhancements
+- Added advanced restriction theorem validation for complex type restrictions
+- Validated occurrence compatibility for derived restricted elements
+- Validated attribute restriction compatibility
+- Validated wildcard restriction compatibility
+- Added issue codes for restriction incompatibility detection
+
+#### Sample XML Generation
+- Added generator options: `maxDepth`, `maxChoiceBranches`, and `expandRepeatingElements`
+- Added recursive type cycle detection to prevent infinite sample generation
+- Improved sample generation for choice and repeated element scenarios
+
+#### Documentation & Testing
+- Updated `API_DOCUMENTATION.md` and `README.md` to reflect new wildcard and generator behavior
+- Extended `playground.html` with new wildcard and recursive sample generation test cases
+
+#### Files Modified
+- `src/model/schemaModel.js`
+- `src/parser/buildSchemaModel.js`
+- `src/validation/wildcardValidator.js`
+- `src/validation/structureValidator.js`
+- `src/diagnostics/schemaWildcardDiagnostics.js`
+- `src/diagnostics/schemaRestrictionDiagnostics.js`
+- `src/generator/generateXml.js`
+- `API_DOCUMENTATION.md`
+- `README.md`
+- `playground.html`
+
 ## [0.2.0]
 
 ## Identity Constraints Support ⭐

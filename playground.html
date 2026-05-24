@@ -1653,6 +1653,131 @@
 </xs:schema>`
 },
 {
+  id: "wildcard-strict-allowed",
+  label: "74. Wildcard strict valid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="extra" type="xs:string"/>
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" processContents="strict" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root><extra>ok</extra></root>`
+},
+{
+  id: "wildcard-strict-fail",
+  label: "75. Wildcard strict invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" processContents="strict" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root><unknown>fail</unknown></root>`
+},
+{
+  id: "wildcard-lax-valid",
+  label: "76. Wildcard lax allows unknown",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root><unknown>ok</unknown></root>`
+},
+{
+  id: "wildcard-skip-valid",
+  label: "77. Wildcard skip allows unknown",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root><unknown>skip</unknown></root>`
+},
+{
+  id: "wildcard-notnamespace-fail",
+  label: "78. Wildcard notNamespace exclusion",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://exclude">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" notNamespace="http://exclude" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root xmlns:ex="http://exclude"><ex:forbidden>no</ex:forbidden></root>`
+},
+{
+  id: "wildcard-notqname-fail",
+  label: "79. Wildcard notQName exclusion",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="disallowMe" type="xs:string"/>
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:any namespace="##any" notQName="disallowMe" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root><disallowMe>no</disallowMe></root>`
+},
+{
+  id: "anyattribute-strict-fail",
+  label: "80. Wildcard anyAttribute strict invalid",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:anyAttribute namespace="##any" processContents="strict"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`,
+  xml: `<root id="1" unknownAttr="x"/>`
+},
+{
+  id: "sample-maxdepth",
+  label: "81. Sample XML maxDepth",
+  xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="node" type="NodeType"/>
+  <xs:complexType name="NodeType">
+    <xs:sequence>
+      <xs:element name="node" type="NodeType" minOccurs="0" maxOccurs="2"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`,
+  sampleOptions: {
+    mode: "full",
+    maxDepth: 2,
+    maxChoiceBranches: 1,
+    expandRepeatingElements: 1
+  }
+},
+{
   id: "xs:include-namespace-mismtach",
   label: "74. xs:include namespace mismatch",
   xsd: `<?xml version="1.0" encoding="UTF-8"?>
@@ -1850,14 +1975,22 @@ xml: `<note lang="en">Hello<child/></note>`
       function runSampleGeneration() {
         const rootElementName = rootElementNameInput.value.trim();
 
-        const result = generateSampleXml({
-          xsdText: xsdInput.value,
-          options: {
-            rootElementName: rootElementName || undefined,
-            mode: "minimal",
-            includeOptionalAttributes: true,
-            externalDocuments: EXTERNAL_DOCUMENTS
-          },
+const testCase = getSelectedCase();
+      const sampleOptions = {
+        rootElementName: rootElementName || undefined,
+        mode: "minimal",
+        includeOptionalAttributes: true,
+        externalDocuments: EXTERNAL_DOCUMENTS,
+        ...(testCase.sampleOptions || {}),
+      };
+
+      if (!sampleOptions.rootElementName) {
+        delete sampleOptions.rootElementName;
+      }
+
+      const result = generateSampleXml({
+        xsdText: xsdInput.value,
+        options: sampleOptions,
         });
 
         renderSummary(result);

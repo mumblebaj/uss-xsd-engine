@@ -16,6 +16,8 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 
 ---
 
+Consult the Api Documentation for detailed usage and features:
+
 > 📄 API Documentation: See full details in [API DOCUMENTATION](https://github.com/mumblebaj/uss-xsd-engine/blob/main/API_DOCUMENTATION.md)
 
 ---
@@ -64,6 +66,8 @@ It is built to power tools like USS XSD Studio while remaining lightweight, depe
 - Honors:
   - `fixed` values
   - `default` values
+- Depth-limited generation with cycle-safe recursion
+- Controlled choice and repeated element expansion
 
 ### ✅ XML Validation
 - Validate XML against XSD structure
@@ -75,6 +79,9 @@ It is built to power tools like USS XSD Studio while remaining lightweight, depe
 - Mixed content enforcement
 - Attribute validation
 - Facet validation (pattern, length, numeric, etc.)
+- Wildcard support for `xs:any` and `xs:anyAttribute`
+- `processContents` support (`strict`, `lax`, `skip`)
+- Namespace constraint handling including `##any`, `##other`, `##targetNamespace`, exclusions via `notNamespace` and `notQName`
 - Restriction enforcement (runtime)
 - Fixed value enforcement
 
@@ -161,6 +168,9 @@ Generates example XML from XSD.
 - `mode`:  `"minimal"` (default) or `"full"`
 - `targetPrefix`: namespace prefix (default `"tns"`)
 - `includeOptionalAttributes`: boolean
+- `maxDepth`: number — limit recursive complex type expansion (default: 3)
+- `maxChoiceBranches`: number — limit how many choice branches are expanded (default: 1)
+- `expandRepeatingElements`: number — limit repeated element expansion for `maxOccurs > 1` (default: 2)
 - `externalDocuments`: map of schemaLocation → XSD text
 
 ---
@@ -291,22 +301,12 @@ Use **uss-xsd-engine** if you need:
 
 ---
 
-## ⚠️ What This Is NOT (Yet)
-
-* Full W3C spec-complete validator (edge cases still evolving)
-* Streaming validator for very large XML
-* Identity constraint (`xs:key`, etc.) enforcement
-
-➡️ The focus is **practical correctness + usability**, with continuous expansion
-
----
-
 💡 This engine is actively evolving — built to power real tools, not just validate specs.
 
 ---
 
 ## ⚠️ Supported vs Not Fully Supported
-### ✅ Supported (v0.1.x / RC)
+### ✅ Supported (v0.2.1)
 - XSD parsing into an internal schema model
 - Namespace-aware resolution (elements, types, attributes, groups)
 - Extensions (`xs:extension`)
@@ -339,31 +339,12 @@ Use **uss-xsd-engine** if you need:
 
 ---
 
-## ⚠️ Partially Supported / In Progress
-- Deep sample XML expansion:
-  - complex choice branching
-  - recursion depth control
-- Full restriction theorem validation:
-  - advanced edge cases (beyond practical subset checks)
-- Advanced wildcard handling:
-  - `xs:any`
-  - `xs:anyAttribute`
-- Attribute namespace qualification edge cases
-
----
-
 ## ❌ Not Supported Yet
-- Identity constraints:
-  - `xs:key`
-  - `xs:keyref`
-  - `xs:unique`
-- `xs:redefine`
 - Automatic network fetching of schemas
   - (engine is intentionally browser-first and caller-driven)
 - Full W3C spec completeness
   - (focus is practical + real-world coverage)
 - Streaming / incremental validation for very large XML
-
 
 ---
 
@@ -377,47 +358,6 @@ The repository includes `playground.html` for:
 - debugging diagnostics
 
 The playground uses the built bundle to simulate real-world usage.
-
----
-
-## 🧱 Architecture
-
-```ruby
-src/
-  api/
-  parser/
-  model/
-  resolver/
-  validation/
-  generator/
-  tree/
-  diagnostics/
-  utils/
-  ```
-  Design principles:
-  - browser-first
-  - dependency-light
-  - layered architecture
-  - shared semantic model across all features
-
-  ---
-
-  ## 🛣️ Roadmap
-### Near-term
-- Recursive include/import resolution
-- Improved sample XML depth traversal
-- Restriction enforcement (advanced cases)
-- Better namespace output strategies
-
-### Mid-term
-- Identity constraints (key/keyref)
-- Advanced wildcard handling
-- Performance optimizations
-
-### Long-term
-- Full XSD spec coverage
-- Streaming validation
-- USS Pro / hosted engine capabilities
 
 ---
 

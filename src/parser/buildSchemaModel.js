@@ -1,6 +1,7 @@
 import {
   createAllNode,
   createAnyNode,
+  createAnyAttributeNode,
   createAttributeDecl,
   createAttributeGroupDecl,
   createAttributeGroupRef,
@@ -25,8 +26,6 @@ import {
 } from "../resolver/schemaResolvers.js";
 
 const UNSUPPORTED_NODE_FEATURES = new Set([
-  "any",
-  "anyAttribute",
   "redefine",
   "notation",
 ]);
@@ -581,6 +580,10 @@ function parseAttributesContainer(
           issues,
         ),
       );
+    } else if (child.localName === "anyAttribute") {
+      attributes.push(
+        parseAnyAttribute(child, xsdText, lineStarts, parentPath, schema, issues),
+      );
     }
   }
 
@@ -679,6 +682,46 @@ function parseGroupRef(node, xsdText, lineStarts, parentPath, schema, issues) {
   });
 }
 
+function parseWildcardNamespace(namespaceStr) {
+  if (!namespaceStr) return null;
+  
+  const trimmed = namespaceStr.trim();
+  if (!trimmed) return null;
+  
+  // Handle space-separated namespace list
+  if (trimmed.includes(" ")) {
+    return trimmed.split(/\s+/).filter(ns => ns);
+  }
+  
+  return trimmed;
+}
+
+function parseNotNamespace(notNamespaceStr) {
+  if (!notNamespaceStr) return [];
+  
+  const trimmed = notNamespaceStr.trim();
+  if (!trimmed) return [];
+  
+  if (trimmed.includes(" ")) {
+    return trimmed.split(/\s+/).filter(ns => ns);
+  }
+  
+  return [trimmed];
+}
+
+function parseNotQName(notQNameStr) {
+  if (!notQNameStr) return [];
+  
+  const trimmed = notQNameStr.trim();
+  if (!trimmed) return [];
+  
+  if (trimmed.includes(" ")) {
+    return trimmed.split(/\s+/).filter(qn => qn);
+  }
+  
+  return [trimmed];
+}
+
 function parseAny(node, xsdText, lineStarts, parentPath, schema, issues) {
   const path = buildPath(parentPath, node);
   const loc = locateNodeInSource(xsdText, lineStarts, node);
@@ -686,10 +729,29 @@ function parseAny(node, xsdText, lineStarts, parentPath, schema, issues) {
   collectNodeDiagnostics(schema, issues, node, path, loc);
 
   return createAnyNode({
-    namespace: node.getAttribute("namespace"),
+    namespace: parseWildcardNamespace(node.getAttribute("namespace")),
     processContents: node.getAttribute("processContents"),
     minOccurs: normalizeOccurs(node.getAttribute("minOccurs"), 1),
     maxOccurs: normalizeOccurs(node.getAttribute("maxOccurs"), 1),
+    notNamespace: parseNotNamespace(node.getAttribute("notNamespace")),
+    notQName: parseNotQName(node.getAttribute("notQName")),
+    line: loc.line,
+    column: loc.column,
+    path,
+  });
+}
+
+function parseAnyAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
+  const path = buildPath(parentPath, node);
+  const loc = locateNodeInSource(xsdText, lineStarts, node);
+
+  collectNodeDiagnostics(schema, issues, node, path, loc);
+
+  return createAnyAttributeNode({
+    namespace: parseWildcardNamespace(node.getAttribute("namespace")),
+    processContents: node.getAttribute("processContents"),
+    notNamespace: parseNotNamespace(node.getAttribute("notNamespace")),
+    notQName: parseNotQName(node.getAttribute("notQName")),
     line: loc.line,
     column: loc.column,
     path,

@@ -162,6 +162,143 @@ function checkRestrictedAttributes(schema, derivedType, baseType, issues) {
   }
 }
 
+function checkWildcardRestriction(schema, derivedType, baseType, issues) {
+  const derivedContent = getEffectiveContent(schema, derivedType);
+  const baseContent = getEffectiveContent(schema, baseType);
+
+  // Collect wildcards from both types
+  const derivedWildcards = [];
+  const baseWildcards = [];
+
+  function collectWildcards(node, arr) {
+    if (!node) return;
+    if (node.kind === "any") {
+      arr.push(node);
+      return;
+    }
+    if (node.children) {
+      for (const child of asArray(node.children)) {
+        collectWildcards(child, arr);
+      }
+    }
+  }
+
+  collectWildcards(derivedContent, derivedWildcards);
+  collectWildcards(baseContent, baseWildcards);
+
+  // Check if derived wildcards are compatible with base wildcards
+  if (derivedWildcards.length > 0 && baseWildcards.length === 0) {
+    issues.push(
+      buildRestrictionIssue(
+        "XSD_RESTRICTION_WILDCARD_INCOMPATIBLE",
+        `Restricted type introduces wildcard elements that base type does not have.`,
+        derivedType
+      )
+    );
+  }
+
+  // Check anyAttribute compatibility
+  const derivedAttrs = asArray(getEffectiveAttributes(schema, derivedType));
+  const baseAttrs = asArray(getEffectiveAttributes(schema, baseType));
+
+  const derivedHasAnyAttribute = derivedAttrs.some(a => a?.kind === "anyAttribute");
+  const baseHasAnyAttribute = baseAttrs.some(a => a?.kind === "anyAttribute");
+
+  if (derivedHasAnyAttribute && !baseHasAnyAttribute) {
+    issues.push(
+      buildRestrictionIssue(
+        "XSD_RESTRICTION_WILDCARD_INCOMPATIBLE",
+        `Restricted type introduces anyAttribute that base type does not have.`,
+        derivedType
+      )
+    );
+  }
+}
+
+function checkOccurrenceCompatibility(derived, base, name) {
+  const dMin = typeof derived.minOccurs === "number" ? derived.minOccurs : 1;
+  const bMin = typeof base.minOccurs === "number" ? base.minOccurs : 1;
+  const dMax = maxToNumber(derived.maxOccurs ?? 1);
+  const bMax = maxToNumber(base.maxOccurs ?? 1);
+
+  return dMin >= bMin && dMax <= bMax;
+}
+
+function checkComplexContentRestriction(schema, derivedType, baseType, issues) {
+  const derivedContent = getEffectiveContent(schema, derivedType);
+  const baseContent = getEffectiveContent(schema, baseType);
+
+  if (!derivedContent || !baseContent) return;
+
+  const derivedFlat = flattenContent(derivedContent, []);
+  const baseFlat = flattenContent(baseContent, []);
+
+  const baseMap = new Map(baseFlat.map((item) => [item.name, item]));
+
+  for (const item of derivedFlat) {
+    const baseItem = baseMap.get(item.name);
+
+    if (!baseItem) {
+      issues.push(
+        buildRestrictionIssue(
+          "XSD_RESTRICTION_NOT_SUBSET",
+          `Restricted type contains element '${item.name}' not in base type.`,
+          item
+        )
+      );
+      continue;
+    }
+
+    if (!checkOccurrenceCompatibility(item, baseItem, item.name)) {
+      issues.push(
+        buildRestrictionIssue(
+          "XSD_RESTRICTION_OCCURRENCE_INCOMPATIBLE",
+          `Restricted type has incompatible occurrence constraints for '${item.name}'.`,
+          item
+        )
+      );
+    }
+  }
+}
+
+function checkSimpleContentRestriction(schema, derivedType, baseType, issues) {
+  if (baseType.contentModel !== "simple") {
+    issues.push(
+      buildRestrictionIssue(
+        "XSD_RESTRICTION_NOT_SUBSET",
+        `SimpleContent restriction requires base type to have simple content.`,
+        derivedType
+      )
+    );
+  }
+
+  const derivedAttrs = asArray(getEffectiveAttributes(schema, derivedType));
+  const baseAttrs = asArray(getEffectiveAttributes(schema, baseType));
+
+  const baseAttrMap = new Map(
+    baseAttrs
+      .filter((attr) => attr?.kind === "attribute")
+      .map((attr) => [localDeclName(attr), attr])
+  );
+
+  for (const attr of derivedAttrs) {
+    if (attr?.kind !== "attribute") continue;
+
+    const name = localDeclName(attr);
+    const baseAttr = baseAttrMap.get(name);
+
+    if (!baseAttr && !baseAttrs.some(a => a?.kind === "anyAttribute")) {
+      issues.push(
+        buildRestrictionIssue(
+          "XSD_RESTRICTION_ATTRIBUTE_INCOMPATIBLE",
+          `SimpleContent restricted type adds attribute '${name}' not in base type.`,
+          attr
+        )
+      );
+    }
+  }
+}
+
 export function runRestrictionDiagnostics(schema) {
   const issues = [];
 
@@ -174,6 +311,13 @@ export function runRestrictionDiagnostics(schema) {
 
     checkRestrictedContentSubset(schema, complexType, baseType, issues);
     checkRestrictedAttributes(schema, complexType, baseType, issues);
+    checkWildcardRestriction(schema, complexType, baseType, issues);
+
+    if (complexType.contentModel === "complex" && baseType.contentModel === "complex") {
+      checkComplexContentRestriction(schema, complexType, baseType, issues);
+    } else if (complexType.contentModel === "simple" && baseType.contentModel === "simple") {
+      checkSimpleContentRestriction(schema, complexType, baseType, issues);
+    }
   }
 
   return issues;

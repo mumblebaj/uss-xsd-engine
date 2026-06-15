@@ -1503,6 +1503,7 @@ export function buildSchemaModel(doc, options = {}) {
   schema.targetNamespace = getEffectiveTargetNamespace(schemaRoot, options);
   schema.elementFormDefault = schemaRoot.getAttribute("elementFormDefault");
   schema.attributeFormDefault = schemaRoot.getAttribute("attributeFormDefault");
+  schema.schemaVersion = schemaRoot.getAttribute("version");
 
   extractNamespaces(schemaRoot, schema);
 

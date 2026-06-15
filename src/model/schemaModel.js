@@ -4,6 +4,7 @@ export function createEmptySchemaModel() {
     targetNamespace: null,
     elementFormDefault: null,
     attributeFormDefault: null,
+    schemaVersion: null,
 
     namespaces: {
       default: null,

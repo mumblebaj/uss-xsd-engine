@@ -1926,7 +1926,77 @@ xml: `<note lang="en">Hello<child/></note>`
   </xs:complexType>
 </xs:schema>`,
 xml: `<note lang="en">Hello<child/></note>`
-}
+},
+        {
+          id: "redefine-override",
+          label: "83. Redefine - override common type",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:redefine schemaLocation="common.xsd">
+    <xs:complexType name="CommonPersonType">
+      <xs:sequence>
+        <xs:element name="name" type="xs:string"/>
+        <xs:element name="age" type="xs:int"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:redefine>
+
+  <xs:element name="person" type="CommonPersonType"/>
+</xs:schema>`,
+          xml: `<person><name>Alice</name><age>30</age></person>`
+        },
+        {
+          id: "annotation-sample",
+          label: "84. Annotations - documentation & appinfo",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="2.0">
+  <xs:annotation>
+    <xs:documentation xml:lang="en">Sample schema with annotations</xs:documentation>
+    <xs:appinfo>tool:playground</xs:appinfo>
+  </xs:annotation>
+
+  <xs:complexType name="AnnotatedType">
+    <xs:annotation>
+      <xs:documentation>Type doc</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="value" type="xs:string">
+        <xs:annotation>
+          <xs:documentation xml:lang="en">Element doc</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="flag" type="xs:boolean">
+      <xs:annotation>
+        <xs:documentation>Attribute doc</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:element name="item" type="AnnotatedType"/>
+</xs:schema>`,
+          xml: `<item flag="true"><value>ok</value></item>`
+        },
+        {
+          id: "attributegroup-prohibited",
+          label: "85. AttributeGroup use=prohibited",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:attributeGroup name="AuditAttrs">
+    <xs:attribute name="createdBy" type="xs:string"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="UserType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+    <xs:attributeGroup ref="AuditAttrs" use="prohibited"/>
+  </xs:complexType>
+
+  <xs:element name="user" type="UserType"/>
+</xs:schema>`,
+          xml: `<user><name>Alice</name></user>`
+        }
       ];
 
       const testCaseSelect = document.getElementById("testCaseSelect");

@@ -555,7 +555,15 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
 
   collectNodeDiagnostics(schema, issues, node, path, loc);
 
-  const inlineSimpleTypeNode = elementChildren(node).find(
+  const children = elementChildren(node);
+
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
+  const inlineSimpleTypeNode = children.find(
     (child) => child.localName === "simpleType",
   );
   const inlineType = inlineSimpleTypeNode
@@ -582,6 +590,7 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
     use: normalizeUse(node.getAttribute("use")),
     defaultValue: node.getAttribute("default"),
     fixedValue: node.getAttribute("fixed"),
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -658,6 +667,12 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
   let inlineType = null;
   const children = elementChildren(node);
 
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
   const inlineComplexTypeNode = children.find(
     (child) => child.localName === "complexType",
   );
@@ -719,6 +734,7 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
     fixedValue: node.getAttribute("fixed"),
     nillable: node.getAttribute("nillable") === "true",
     identityConstraints,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,

@@ -91,6 +91,7 @@ export function createElementDecl({
   fixedValue = null,
   nillable = false,
   identityConstraints = [],
+  annotation = null,
   line = null,
   column = null,
   path = null
@@ -109,6 +110,7 @@ export function createElementDecl({
     fixedValue,
     nillable,
     identityConstraints,
+    annotation,
     line,
     column,
     path
@@ -125,6 +127,7 @@ export function createAttributeDecl({
   use = null,
   defaultValue = null,
   fixedValue = null,
+  annotation = null,
   line = null,
   column = null,
   path = null
@@ -140,6 +143,7 @@ export function createAttributeDecl({
     use,
     defaultValue,
     fixedValue,
+    annotation,
     line,
     column,
     path

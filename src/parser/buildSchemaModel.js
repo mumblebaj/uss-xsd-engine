@@ -2,6 +2,7 @@ import {
   createAllNode,
   createAnyNode,
   createAnyAttributeNode,
+  createAnnotation,
   createAttributeDecl,
   createAttributeGroupDecl,
   createAttributeGroupRef,
@@ -442,6 +443,50 @@ function parseFacets(node) {
   return { facets, enumerations };
 }
 
+function parseAnnotation(node) {
+  if (!node || node.localName !== "annotation") {
+    return null;
+  }
+
+  const children = Array.from(node.children || []).filter(
+    (child) => child.nodeType === 1,
+  );
+
+  let documentation = null;
+  let appinfo = null;
+
+  for (const child of children) {
+    if (child.localName === "documentation") {
+      const lang = child.getAttribute("xml:lang") || null;
+      const source = child.getAttribute("source") || null;
+      const text = (child.textContent || "").trim();
+
+      documentation = {
+        text,
+        lang,
+        source,
+      };
+    } else if (child.localName === "appinfo") {
+      const source = child.getAttribute("source") || null;
+      const text = (child.textContent || "").trim();
+
+      appinfo = {
+        text,
+        source,
+      };
+    }
+  }
+
+  if (!documentation && !appinfo) {
+    return null;
+  }
+
+  return createAnnotation({
+    documentation,
+    appinfo,
+  });
+}
+
 function parseSimpleType(
   node,
   xsdText,
@@ -459,7 +504,15 @@ function parseSimpleType(
   let facets = {};
   let enumerations = [];
 
-  const restriction = elementChildren(node).find(
+  const children = elementChildren(node);
+
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
+  const restriction = children.find(
     (child) => child.localName === "restriction",
   );
   if (restriction) {
@@ -489,6 +542,7 @@ function parseSimpleType(
     baseTypeName,
     facets,
     enumerations,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -1012,6 +1066,12 @@ function parseComplexType(
   const children = elementChildren(node);
   const namespaceUri = schema.targetNamespace || null;
 
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
   const identityConstraints = children
     .filter((child) =>
       ["key", "keyref", "unique"].includes(child.localName),
@@ -1112,6 +1172,7 @@ function parseComplexType(
     mixed: node.getAttribute("mixed") === "true",
     abstract: node.getAttribute("abstract") === "true",
     identityConstraints,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,

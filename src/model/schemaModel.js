@@ -66,6 +66,17 @@ export function normalizeUse(value) {
   return null;
 }
 
+export function createAnnotation({
+  documentation = null,
+  appinfo = null,
+} = {}) {
+  return {
+    kind: "annotation",
+    documentation,
+    appinfo,
+  };
+}
+
 export function createElementDecl({
   name = null,
   qName = null,
@@ -145,6 +156,7 @@ export function createComplexTypeDecl({
   mixed = false,
   abstract = false,
   identityConstraints = [],
+  annotation = null,
   line = null,
   column = null,
   path = null
@@ -161,6 +173,7 @@ export function createComplexTypeDecl({
     mixed,
     abstract,
     identityConstraints,
+    annotation,
     line,
     column,
     path
@@ -174,6 +187,7 @@ export function createSimpleTypeDecl({
   baseTypeName = null,
   facets = {},
   enumerations = [],
+  annotation = null,
   line = null,
   column = null,
   path = null
@@ -186,6 +200,7 @@ export function createSimpleTypeDecl({
     baseTypeName,
     facets,
     enumerations,
+    annotation,
     line,
     column,
     path

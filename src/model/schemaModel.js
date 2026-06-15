@@ -22,7 +22,8 @@ export function createEmptySchemaModel() {
     documents: [],
     externalRefs: {
       includes: [],
-      imports: []
+      imports: [],
+      redefines: []
     },
 
     importedSchemas: [],

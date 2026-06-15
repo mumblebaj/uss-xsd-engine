@@ -26,7 +26,6 @@ import {
 } from "../resolver/schemaResolvers.js";
 
 const UNSUPPORTED_NODE_FEATURES = new Set([
-  "redefine",
   "notation",
 ]);
 
@@ -50,6 +49,8 @@ function recordExternalRef(schema, kind, node, path, loc) {
     schema.externalRefs.includes.push(entry);
   } else if (kind === "import") {
     schema.externalRefs.imports.push(entry);
+  } else if (kind === "redefine") {
+    schema.externalRefs.redefines.push(entry);
   }
 }
 
@@ -98,6 +99,9 @@ function mergeGlobalsIntoSchema(
   );
   targetSchema.externalRefs.imports.push(
     ...(sourceSchema.externalRefs.imports || []),
+  );
+  targetSchema.externalRefs.redefines.push(
+    ...(sourceSchema.externalRefs.redefines || []),
   );
 
   targetSchema.importedSchemas.push(...(sourceSchema.importedSchemas || []));
@@ -1214,6 +1218,81 @@ function isImportNamespaceCompatible(ref, importedSchema) {
   return (declaredNs || null) === (importedNs || null);
 }
 
+function isRedefineNamespaceCompatible(hostSchema, redefinedSchema) {
+  const hostNs = hostSchema?.targetNamespace || null;
+  const redefinedNs = redefinedSchema?.targetNamespace || null;
+
+  return hostNs === redefinedNs;
+}
+
+function mergeRedefinesIntoSchema(
+  targetSchema,
+  sourceSchema,
+  issues,
+  createDuplicateIssue,
+) {
+  // For redefine, override existing types and groups
+  // but keep original definitions intact for backward compatibility
+  const buckets = [
+    ["complexTypes", "DUPLICATE_GLOBAL_COMPLEX_TYPE"],
+    ["simpleTypes", "DUPLICATE_GLOBAL_SIMPLE_TYPE"],
+    ["groups", "DUPLICATE_GLOBAL_GROUP"],
+    ["attributeGroups", "DUPLICATE_GLOBAL_ATTRIBUTE_GROUP"],
+  ];
+
+  for (const [bucketName, _duplicateCode] of buckets) {
+    for (const [key, decl] of Object.entries(
+      sourceSchema.globals[bucketName] || {},
+    )) {
+      if (targetSchema.globals[bucketName][key]) {
+        // Redefine overrides the existing definition
+        // Store reference to original for potential backward compatibility
+        targetSchema.globals[bucketName][key] = {
+          ...decl,
+          redefined: true,
+          originalDefinition: targetSchema.globals[bucketName][key],
+        };
+      } else {
+        // If not found, this is an error - redefine must redefine existing items
+        issues.push(
+          createIssue({
+            code: ISSUE_CODES.REDEFINE_INVALID_OVERRIDE,
+            severity: "error",
+            message: `xs:redefine attempts to override ${bucketName.slice(0, -1)} '${decl.name}' which does not exist in the base schema.`,
+            line: decl.line,
+            column: decl.column,
+            path: decl.path,
+            source: "xsd",
+            nodeKind: decl.kind,
+            name: decl.name,
+            details: { declarationName: decl.name },
+          }),
+        );
+      }
+    }
+  }
+
+  // Merge other schema information
+  targetSchema.references.types.push(...(sourceSchema.references.types || []));
+  targetSchema.references.baseTypes.push(
+    ...(sourceSchema.references.baseTypes || []),
+  );
+  targetSchema.references.groupRefs.push(
+    ...(sourceSchema.references.groupRefs || []),
+  );
+  targetSchema.references.attributeGroupRefs.push(
+    ...(sourceSchema.references.attributeGroupRefs || []),
+  );
+
+  for (const feature of sourceSchema.usedFeatures || []) {
+    targetSchema.usedFeatures.add(feature);
+  }
+
+  targetSchema.unsupportedFeatures.push(
+    ...(sourceSchema.unsupportedFeatures || []),
+  );
+}
+
 function normalizeSchemaPath(value) {
   if (!value || typeof value !== "string") return null;
 
@@ -1526,6 +1605,14 @@ export function buildSchemaModel(doc, options = {}) {
         break;
       }
 
+      case "redefine": {
+        const path = buildPath(rootPath, child);
+        const loc = locateNodeInSource(xsdText, lineStarts, child);
+        collectNodeDiagnostics(schema, issues, child, path, loc);
+        recordExternalRef(schema, "redefine", child, path, loc);
+        break;
+      }
+
       default: {
         const path = buildPath(rootPath, child);
         const loc = locateNodeInSource(xsdText, lineStarts, child);
@@ -1555,8 +1642,9 @@ export function buildSchemaModel(doc, options = {}) {
 
   const includes = schema.externalRefs.includes || [];
   const imports = schema.externalRefs.imports || [];
+  const redefines = schema.externalRefs.redefines || [];
 
-  for (const ref of [...includes, ...imports]) {
+  for (const ref of [...includes, ...imports, ...redefines]) {
     if (!ref.schemaLocation) continue;
 
     const resolution = resolveExternalDocument(ref, externalDocuments);
@@ -1710,6 +1798,35 @@ export function buildSchemaModel(doc, options = {}) {
           );
         } else {
           schema.importedSchemas.push(externalBuild.schema);
+        }
+      } else if (ref.kind === "redefine") {
+        if (!isRedefineNamespaceCompatible(schema, externalBuild.schema)) {
+          issues.push(
+            createIssue({
+              code: ISSUE_CODES.XSD_REDEFINE_NAMESPACE_MISMATCH,
+              severity: "error",
+              message: `xs:redefine namespace mismatch. Host targetNamespace is '${schema.targetNamespace || ""}', redefined schema targetNamespace is '${externalBuild.schema.targetNamespace || ""}'.`,
+              line: ref.line,
+              column: ref.column,
+              path: ref.path,
+              source: "xsd",
+              nodeKind: "redefine",
+              details: {
+                schemaLocation: ref.schemaLocation,
+                resolvedSchemaKey,
+                hostTargetNamespace: schema.targetNamespace || null,
+                redefinedTargetNamespace:
+                  externalBuild.schema.targetNamespace || null,
+              },
+            }),
+          );
+        } else {
+          mergeRedefinesIntoSchema(
+            schema,
+            externalBuild.schema,
+            issues,
+            createDuplicateIssue,
+          );
         }
       }
     }

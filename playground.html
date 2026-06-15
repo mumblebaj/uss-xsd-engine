@@ -1947,7 +1947,7 @@ xml: `<note lang="en">Hello<child/></note>`
         },
         {
           id: "redefine-override-valid",
-          label: "94b. Redefine - successful override (include then redefine)",
+          label: "94b. Redefine - valid namespace match (include then redefine)",
           xsd: `<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:include schemaLocation="common.xsd"/>
@@ -1956,14 +1956,13 @@ xml: `<note lang="en">Hello<child/></note>`
     <xs:complexType name="CommonPersonType">
       <xs:sequence>
         <xs:element name="name" type="xs:string"/>
-        <xs:element name="age" type="xs:int"/>
       </xs:sequence>
     </xs:complexType>
   </xs:redefine>
 
   <xs:element name="person" type="CommonPersonType"/>
 </xs:schema>`,
-          xml: `<person><name>Alice</name><age>30</age></person>`
+          xml: `<person><name>Alice</name></person>`
         },
         {
           id: "annotation-sample",

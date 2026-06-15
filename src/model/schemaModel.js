@@ -236,6 +236,7 @@ export function createAttributeGroupDecl({
 
 export function createAttributeGroupRef({
   refName,
+  use = null,
   line = null,
   column = null,
   path = null
@@ -243,6 +244,7 @@ export function createAttributeGroupRef({
   return {
     kind: "attributeGroupRef",
     refName,
+    use,
     line,
     column,
     path

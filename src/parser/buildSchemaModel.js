@@ -549,6 +549,7 @@ function parseAttributeGroupRef(
 
   return createAttributeGroupRef({
     refName: node.getAttribute("ref"),
+    use: normalizeUse(node.getAttribute("use")),
     line: loc.line,
     column: loc.column,
     path,

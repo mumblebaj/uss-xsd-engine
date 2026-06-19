@@ -2,6 +2,7 @@ import {
   createAllNode,
   createAnyNode,
   createAnyAttributeNode,
+  createAnnotation,
   createAttributeDecl,
   createAttributeGroupDecl,
   createAttributeGroupRef,
@@ -26,7 +27,6 @@ import {
 } from "../resolver/schemaResolvers.js";
 
 const UNSUPPORTED_NODE_FEATURES = new Set([
-  "redefine",
   "notation",
 ]);
 
@@ -50,6 +50,8 @@ function recordExternalRef(schema, kind, node, path, loc) {
     schema.externalRefs.includes.push(entry);
   } else if (kind === "import") {
     schema.externalRefs.imports.push(entry);
+  } else if (kind === "redefine") {
+    schema.externalRefs.redefines.push(entry);
   }
 }
 
@@ -98,6 +100,9 @@ function mergeGlobalsIntoSchema(
   );
   targetSchema.externalRefs.imports.push(
     ...(sourceSchema.externalRefs.imports || []),
+  );
+  targetSchema.externalRefs.redefines.push(
+    ...(sourceSchema.externalRefs.redefines || []),
   );
 
   targetSchema.importedSchemas.push(...(sourceSchema.importedSchemas || []));
@@ -438,6 +443,50 @@ function parseFacets(node) {
   return { facets, enumerations };
 }
 
+function parseAnnotation(node) {
+  if (!node || node.localName !== "annotation") {
+    return null;
+  }
+
+  const children = Array.from(node.children || []).filter(
+    (child) => child.nodeType === 1,
+  );
+
+  let documentation = null;
+  let appinfo = null;
+
+  for (const child of children) {
+    if (child.localName === "documentation") {
+      const lang = child.getAttribute("xml:lang") || null;
+      const source = child.getAttribute("source") || null;
+      const text = (child.textContent || "").trim();
+
+      documentation = {
+        text,
+        lang,
+        source,
+      };
+    } else if (child.localName === "appinfo") {
+      const source = child.getAttribute("source") || null;
+      const text = (child.textContent || "").trim();
+
+      appinfo = {
+        text,
+        source,
+      };
+    }
+  }
+
+  if (!documentation && !appinfo) {
+    return null;
+  }
+
+  return createAnnotation({
+    documentation,
+    appinfo,
+  });
+}
+
 function parseSimpleType(
   node,
   xsdText,
@@ -455,7 +504,15 @@ function parseSimpleType(
   let facets = {};
   let enumerations = [];
 
-  const restriction = elementChildren(node).find(
+  const children = elementChildren(node);
+
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
+  const restriction = children.find(
     (child) => child.localName === "restriction",
   );
   if (restriction) {
@@ -485,6 +542,7 @@ function parseSimpleType(
     baseTypeName,
     facets,
     enumerations,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -497,7 +555,15 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
 
   collectNodeDiagnostics(schema, issues, node, path, loc);
 
-  const inlineSimpleTypeNode = elementChildren(node).find(
+  const children = elementChildren(node);
+
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
+  const inlineSimpleTypeNode = children.find(
     (child) => child.localName === "simpleType",
   );
   const inlineType = inlineSimpleTypeNode
@@ -524,6 +590,7 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
     use: normalizeUse(node.getAttribute("use")),
     defaultValue: node.getAttribute("default"),
     fixedValue: node.getAttribute("fixed"),
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -545,6 +612,7 @@ function parseAttributeGroupRef(
 
   return createAttributeGroupRef({
     refName: node.getAttribute("ref"),
+    use: normalizeUse(node.getAttribute("use")),
     line: loc.line,
     column: loc.column,
     path,
@@ -598,6 +666,12 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
 
   let inlineType = null;
   const children = elementChildren(node);
+
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
 
   const inlineComplexTypeNode = children.find(
     (child) => child.localName === "complexType",
@@ -660,6 +734,7 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
     fixedValue: node.getAttribute("fixed"),
     nillable: node.getAttribute("nillable") === "true",
     identityConstraints,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -1007,6 +1082,12 @@ function parseComplexType(
   const children = elementChildren(node);
   const namespaceUri = schema.targetNamespace || null;
 
+  // Extract annotation if present
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode);
+
   const identityConstraints = children
     .filter((child) =>
       ["key", "keyref", "unique"].includes(child.localName),
@@ -1107,6 +1188,7 @@ function parseComplexType(
     mixed: node.getAttribute("mixed") === "true",
     abstract: node.getAttribute("abstract") === "true",
     identityConstraints,
+    annotation,
     line: loc.line,
     column: loc.column,
     path,
@@ -1212,6 +1294,81 @@ function isImportNamespaceCompatible(ref, importedSchema) {
   }
 
   return (declaredNs || null) === (importedNs || null);
+}
+
+function isRedefineNamespaceCompatible(hostSchema, redefinedSchema) {
+  const hostNs = hostSchema?.targetNamespace || null;
+  const redefinedNs = redefinedSchema?.targetNamespace || null;
+
+  return hostNs === redefinedNs;
+}
+
+function mergeRedefinesIntoSchema(
+  targetSchema,
+  sourceSchema,
+  issues,
+  createDuplicateIssue,
+) {
+  // For redefine, override existing types and groups
+  // but keep original definitions intact for backward compatibility
+  const buckets = [
+    ["complexTypes", "DUPLICATE_GLOBAL_COMPLEX_TYPE"],
+    ["simpleTypes", "DUPLICATE_GLOBAL_SIMPLE_TYPE"],
+    ["groups", "DUPLICATE_GLOBAL_GROUP"],
+    ["attributeGroups", "DUPLICATE_GLOBAL_ATTRIBUTE_GROUP"],
+  ];
+
+  for (const [bucketName, _duplicateCode] of buckets) {
+    for (const [key, decl] of Object.entries(
+      sourceSchema.globals[bucketName] || {},
+    )) {
+      if (targetSchema.globals[bucketName][key]) {
+        // Redefine overrides the existing definition
+        // Store reference to original for potential backward compatibility
+        targetSchema.globals[bucketName][key] = {
+          ...decl,
+          redefined: true,
+          originalDefinition: targetSchema.globals[bucketName][key],
+        };
+      } else {
+        // If not found, this is an error - redefine must redefine existing items
+        issues.push(
+          createIssue({
+            code: ISSUE_CODES.REDEFINE_INVALID_OVERRIDE,
+            severity: "error",
+            message: `xs:redefine attempts to override ${bucketName.slice(0, -1)} '${decl.name}' which does not exist in the base schema.`,
+            line: decl.line,
+            column: decl.column,
+            path: decl.path,
+            source: "xsd",
+            nodeKind: decl.kind,
+            name: decl.name,
+            details: { declarationName: decl.name },
+          }),
+        );
+      }
+    }
+  }
+
+  // Merge other schema information
+  targetSchema.references.types.push(...(sourceSchema.references.types || []));
+  targetSchema.references.baseTypes.push(
+    ...(sourceSchema.references.baseTypes || []),
+  );
+  targetSchema.references.groupRefs.push(
+    ...(sourceSchema.references.groupRefs || []),
+  );
+  targetSchema.references.attributeGroupRefs.push(
+    ...(sourceSchema.references.attributeGroupRefs || []),
+  );
+
+  for (const feature of sourceSchema.usedFeatures || []) {
+    targetSchema.usedFeatures.add(feature);
+  }
+
+  targetSchema.unsupportedFeatures.push(
+    ...(sourceSchema.unsupportedFeatures || []),
+  );
 }
 
 function normalizeSchemaPath(value) {
@@ -1362,6 +1519,7 @@ export function buildSchemaModel(doc, options = {}) {
   schema.targetNamespace = getEffectiveTargetNamespace(schemaRoot, options);
   schema.elementFormDefault = schemaRoot.getAttribute("elementFormDefault");
   schema.attributeFormDefault = schemaRoot.getAttribute("attributeFormDefault");
+  schema.schemaVersion = schemaRoot.getAttribute("version");
 
   extractNamespaces(schemaRoot, schema);
 
@@ -1526,6 +1684,14 @@ export function buildSchemaModel(doc, options = {}) {
         break;
       }
 
+      case "redefine": {
+        const path = buildPath(rootPath, child);
+        const loc = locateNodeInSource(xsdText, lineStarts, child);
+        collectNodeDiagnostics(schema, issues, child, path, loc);
+        recordExternalRef(schema, "redefine", child, path, loc);
+        break;
+      }
+
       default: {
         const path = buildPath(rootPath, child);
         const loc = locateNodeInSource(xsdText, lineStarts, child);
@@ -1555,8 +1721,9 @@ export function buildSchemaModel(doc, options = {}) {
 
   const includes = schema.externalRefs.includes || [];
   const imports = schema.externalRefs.imports || [];
+  const redefines = schema.externalRefs.redefines || [];
 
-  for (const ref of [...includes, ...imports]) {
+  for (const ref of [...includes, ...imports, ...redefines]) {
     if (!ref.schemaLocation) continue;
 
     const resolution = resolveExternalDocument(ref, externalDocuments);
@@ -1710,6 +1877,35 @@ export function buildSchemaModel(doc, options = {}) {
           );
         } else {
           schema.importedSchemas.push(externalBuild.schema);
+        }
+      } else if (ref.kind === "redefine") {
+        if (!isRedefineNamespaceCompatible(schema, externalBuild.schema)) {
+          issues.push(
+            createIssue({
+              code: ISSUE_CODES.XSD_REDEFINE_NAMESPACE_MISMATCH,
+              severity: "error",
+              message: `xs:redefine namespace mismatch. Host targetNamespace is '${schema.targetNamespace || ""}', redefined schema targetNamespace is '${externalBuild.schema.targetNamespace || ""}'.`,
+              line: ref.line,
+              column: ref.column,
+              path: ref.path,
+              source: "xsd",
+              nodeKind: "redefine",
+              details: {
+                schemaLocation: ref.schemaLocation,
+                resolvedSchemaKey,
+                hostTargetNamespace: schema.targetNamespace || null,
+                redefinedTargetNamespace:
+                  externalBuild.schema.targetNamespace || null,
+              },
+            }),
+          );
+        } else {
+          mergeRedefinesIntoSchema(
+            schema,
+            externalBuild.schema,
+            issues,
+            createDuplicateIssue,
+          );
         }
       }
     }

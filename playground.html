@@ -2062,7 +2062,8 @@ xml: `<note lang="en">Hello<child/></note>`
         },
         {
           id: "phase3-2-schema-version-annotation",
-          label: "99. Phase 3.2 - schema version + type annotation",
+          label: "99. Phase 3.2 - schemaVersion tracking + type annotation",
+          // Note: this case validates schema metadata tracking, not strict XML declaration/version enforcement.
           xsd: `<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.1">
   <xs:complexType name="CustomerType">

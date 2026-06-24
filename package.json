@@ -1,6 +1,6 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "dist/uss-xsd-engine.esm.js",
@@ -32,6 +32,7 @@
   "scripts": {
     "write": "node scripts/write-version.js",
     "build": "node scripts/build.mjs",
+    "test": "node --test \"tests/**/*.test.js\"",
     "clean": "rm -rf dist",
     "check:git": "git diff --quiet && git diff --cached --quiet",
     "version:beta": "npm version prerelease --preid=beta",

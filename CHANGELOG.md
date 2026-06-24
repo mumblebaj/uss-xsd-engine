@@ -32,7 +32,6 @@ Completed and verified the remaining Phase 3.2 advanced schema features from the
   - complex type documentation annotation capture
   - enumeration annotation metadata capture
 - Updated playground scenarios with Phase 3.2-focused cases
-- Updated upgrade plan success criteria to reflect verification status
 
 ### Files Modified
 - `src/resolver/schemaResolvers.js`

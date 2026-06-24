@@ -355,18 +355,142 @@ function mergeAttributeArrays(baseAttrs = [], ownAttrs = []) {
   return [...baseAttrs, ...ownAttrs];
 }
 
+function attributeDeclName(attributeDecl) {
+  return attributeDecl?.refName || attributeDecl?.name || null;
+}
+
+function collectExpandedAttributes(schema, entries = [], visitedGroups = new Set()) {
+  const expanded = [];
+
+  for (const entry of entries || []) {
+    if (!entry) continue;
+
+    if (entry.kind === "attribute") {
+      expanded.push(entry);
+      continue;
+    }
+
+    if (entry.kind === "anyAttribute") {
+      expanded.push(entry);
+      continue;
+    }
+
+    if (entry.kind === "attributeGroupRef") {
+      const refName = entry.refName;
+      if (!refName) continue;
+
+      const visitKey = `${refName}`;
+      if (visitedGroups.has(visitKey)) continue;
+
+      const group = resolveAttributeGroup(schema, refName);
+      if (!group) continue;
+
+      visitedGroups.add(visitKey);
+      const groupAttrs = collectExpandedAttributes(
+        schema,
+        group.attributes || [],
+        visitedGroups,
+      );
+      expanded.push(...groupAttrs);
+      visitedGroups.delete(visitKey);
+    }
+  }
+
+  return expanded;
+}
+
+function applyRestrictionAttributes(schema, baseAttributes = [], ownAttributes = []) {
+  const effective = new Map();
+  let wildcard = null;
+
+  for (const entry of collectExpandedAttributes(schema, baseAttributes)) {
+    if (entry.kind === "anyAttribute") {
+      wildcard = entry;
+      continue;
+    }
+
+    const name = attributeDeclName(entry);
+    if (name) effective.set(name, entry);
+  }
+
+  for (const entry of ownAttributes || []) {
+    if (!entry) continue;
+
+    if (entry.kind === "attribute" && entry.use === "prohibited") {
+      const name = attributeDeclName(entry);
+      if (name) effective.delete(name);
+      continue;
+    }
+
+    if (entry.kind === "attributeGroupRef" && entry.use === "prohibited") {
+      const prohibitedGroupAttrs = collectExpandedAttributes(schema, [entry]);
+      for (const groupAttr of prohibitedGroupAttrs) {
+        if (groupAttr.kind !== "attribute") continue;
+        const name = attributeDeclName(groupAttr);
+        if (name) effective.delete(name);
+      }
+    }
+  }
+
+  for (const entry of ownAttributes || []) {
+    if (!entry) continue;
+
+    if (entry.kind === "attribute") {
+      if (entry.use === "prohibited") continue;
+      const name = attributeDeclName(entry);
+      if (name) effective.set(name, entry);
+      continue;
+    }
+
+    if (entry.kind === "attributeGroupRef") {
+      if (entry.use === "prohibited") continue;
+
+      const groupAttrs = collectExpandedAttributes(schema, [entry]);
+      for (const groupAttr of groupAttrs) {
+        if (groupAttr.kind !== "attribute") {
+          if (groupAttr.kind === "anyAttribute") wildcard = groupAttr;
+          continue;
+        }
+
+        const name = attributeDeclName(groupAttr);
+        if (name) effective.set(name, groupAttr);
+      }
+      continue;
+    }
+
+    if (entry.kind === "anyAttribute") {
+      wildcard = entry;
+    }
+  }
+
+  return wildcard ? [...effective.values(), wildcard] : [...effective.values()];
+}
+
 export function getEffectiveAttributes(schema, complexTypeDecl) {
   if (!complexTypeDecl) return [];
 
   const own = complexTypeDecl.attributes || [];
   const baseTypeName = complexTypeDecl.derivation?.baseTypeName;
+  const derivationKind = complexTypeDecl.derivation?.kind;
 
-  if (!baseTypeName || complexTypeDecl.derivation?.kind !== "extension") {
+  if (!baseTypeName || !derivationKind) {
     return own;
   }
 
   const base = resolveGlobalComplexType(schema, baseTypeName);
   if (!base) return own;
+
+  if (derivationKind === "restriction") {
+    return applyRestrictionAttributes(
+      schema,
+      getEffectiveAttributes(schema, base),
+      own,
+    );
+  }
+
+  if (derivationKind !== "extension") {
+    return own;
+  }
 
   return mergeAttributeArrays(getEffectiveAttributes(schema, base), own);
 }

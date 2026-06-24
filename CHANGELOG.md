@@ -1,5 +1,94 @@
 # Changelog
 
+## [0.2.3] - 2026-06-24
+
+## Phase 3.2 Completion: Restriction-Prohibited Enforcement and Enumeration Metadata ⭐
+
+### Summary
+Completed and verified the remaining Phase 3.2 advanced schema features from the upgrade plan, including restriction-aware `use="prohibited"` handling, enriched enumeration metadata capture, annotation coverage validation, and schema version tracking validation.
+
+### What Changed
+
+#### Restriction + Attribute Group Enforcement
+- Added restriction-aware effective attribute resolution for derived complex types
+- Enforced `use="prohibited"` removals for inherited attributes
+- Added support for prohibiting inherited attributes originating from `attributeGroup` references
+
+#### Enumeration Metadata
+- Updated facet parsing to store enumeration entries as metadata objects
+- Added per-enumeration annotation capture (`xs:annotation/xs:documentation` and `xs:appinfo`)
+- Preserved source location metadata (`line`, `column`, `path`) for enumeration entries
+
+#### Compatibility Updates
+- Updated value validation to consume object-based enumeration metadata
+- Updated sample generation to use metadata-backed enumeration values
+- Updated facet diagnostics duplicate-enumeration checks for metadata-backed enumerations
+- Updated tree extraction to render enumeration labels from metadata entries
+
+#### Phase 3.2 Verification Assets
+- Added focused smoke tests for:
+  - restricted/prohibited attribute-group behavior
+  - schema `schemaVersion` tracking
+  - complex type documentation annotation capture
+  - enumeration annotation metadata capture
+- Updated playground scenarios with Phase 3.2-focused cases
+- Updated upgrade plan success criteria to reflect verification status
+
+### Files Modified
+- `src/resolver/schemaResolvers.js`
+- `src/parser/buildSchemaModel.js`
+- `src/validation/valueValidator.js`
+- `src/generator/sampleValueFactory.js`
+- `src/diagnostics/schemaFacetDiagnostics.js`
+- `src/tree/extractTree.js`
+- `tests/smoke/phase3_2_advancedFeatures.test.js`
+- `playground.html`
+- `UPGRADE_PLAN.md`
+- `CHANGELOG.md`
+
+## [0.2.2] - 2026-06-19
+
+## Redefine Phase 3, Annotation Coverage, and Attribute Group Tightening ⭐
+
+### Summary
+Added Phase 3 `xs:redefine` support, completed annotation capture across schema components, tracked schema `version`, and enforced `use="prohibited"` behavior in attribute group references.
+
+### Release Notes
+- Published release branch `dev-v2.2`
+- Tagged version `v0.2.2`
+
+This release improves schema composition behavior and metadata coverage while adding stronger redefine-focused tests and documentation updates.
+
+### What Changed
+
+#### Redefine Support
+- Added `xs:redefine` support for Phase 3 scenarios
+- Added a positive redefine test path that includes include-then-redefine flow validation
+
+#### Annotation Support
+- Added annotation support for complex and simple types
+- Completed annotation support for elements and attributes
+
+#### Attribute and Schema Metadata
+- Added support for `use="prohibited"` on attribute group references
+- Added schema `version` attribute tracking in the model
+
+#### Playground, Docs, and Versioning
+- Added playground test cases for redefine, annotations, and `attributeGroup` prohibited usage
+- Updated project documentation to reflect the new behavior
+- Updated package/runtime version metadata to `0.2.2`
+
+#### Files Modified
+- `src/parser/buildSchemaModel.js`
+- `src/model/schemaModel.js`
+- `src/diagnostics/issueCodes.js`
+- `playground.html`
+- `verify-redefine.mjs`
+- `README.md`
+- `CHANGELOG.md`
+- `package.json`
+- `src/version.js`
+
 ## [0.2.1] - 2026-05-23
 
 ## Advanced Wildcards, Restriction Validation, and Sample Generation ⭐

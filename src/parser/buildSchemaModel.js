@@ -395,7 +395,7 @@ function collectNodeDiagnostics(schema, issues, node, path, loc) {
   }
 }
 
-function parseFacets(node) {
+function parseFacets(node, xsdText, lineStarts, parentPath) {
   const facets = {};
   const enumerations = [];
 
@@ -403,7 +403,19 @@ function parseFacets(node) {
     switch (child.localName) {
       case "enumeration":
         if (child.hasAttribute("value")) {
-          enumerations.push(child.getAttribute("value"));
+          const enumPath = buildPath(parentPath, child);
+          const enumLoc = locateNodeInSource(xsdText, lineStarts, child);
+          const enumAnnotationNode = elementChildren(child).find(
+            (item) => item.localName === "annotation",
+          );
+
+          enumerations.push({
+            value: child.getAttribute("value"),
+            annotation: parseAnnotation(enumAnnotationNode),
+            line: enumLoc.line,
+            column: enumLoc.column,
+            path: enumPath,
+          });
         }
         break;
       case "minLength":
@@ -527,7 +539,12 @@ function parseSimpleType(
     );
 
     baseTypeName = restriction.getAttribute("base");
-    const parsed = parseFacets(restriction);
+    const parsed = parseFacets(
+      restriction,
+      xsdText,
+      lineStarts,
+      restrictionPath,
+    );
     facets = parsed.facets;
     enumerations = parsed.enumerations;
   }

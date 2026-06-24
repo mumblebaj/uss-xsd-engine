@@ -6,7 +6,14 @@ import {
 
 function firstEnumeration(simpleTypeDecl) {
   const enums = simpleTypeDecl?.enumerations || [];
-  return enums.length ? String(enums[0]) : null;
+  if (!enums.length) return null;
+
+  const first = enums[0];
+  if (first && typeof first === "object") {
+    return first.value != null ? String(first.value) : null;
+  }
+
+  return String(first);
 }
 
 function padToLength(text, targetLength) {

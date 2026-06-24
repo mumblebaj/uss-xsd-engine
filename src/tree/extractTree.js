@@ -19,6 +19,13 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function enumerationNodeValue(enumeration) {
+  if (enumeration && typeof enumeration === "object") {
+    return enumeration.value;
+  }
+  return enumeration;
+}
+
 function makeVisitedKey(prefix, nameOrPath) {
   return `${prefix}:${nameOrPath || "anonymous"}`;
 }
@@ -65,10 +72,10 @@ function buildSimpleTypeChildren(schema, simpleTypeDecl) {
         path: simpleTypeDecl.path
           ? `${simpleTypeDecl.path}/enumerations`
           : null,
-        children: enumerations.map((value, index) =>
+        children: enumerations.map((enumeration, index) =>
           createTreeNode({
             kind: "enumeration",
-            label: String(value),
+            label: String(enumerationNodeValue(enumeration)),
             line: simpleTypeDecl.line,
             column: simpleTypeDecl.column,
             path: simpleTypeDecl.path

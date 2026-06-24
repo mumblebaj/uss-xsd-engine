@@ -81,7 +81,8 @@ function checkEnumeration(simpleType, issues, ctx) {
   if (enums.length === 0) return;
 
   const seen = new Set();
-  for (const val of enums) {
+  for (const item of enums) {
+    const val = item && typeof item === "object" ? item.value : item;
     if (seen.has(val)) {
       issues.push(ctx.issue("XSD_ENUM_DUPLICATE", `Duplicate enumeration value '${val}'.`, simpleType));
     }

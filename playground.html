@@ -2015,6 +2015,67 @@ xml: `<note lang="en">Hello<child/></note>`
   <xs:element name="user" type="UserType"/>
 </xs:schema>`,
           xml: `<user><name>Alice</name></user>`
+        },
+        {
+          id: "phase3-2-restriction-prohibited-group",
+          label: "97. Phase 3.2 - restriction prohibits inherited group attr",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:attributeGroup name="BaseAttrs">
+    <xs:attribute name="legacy" type="xs:string"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="BaseType">
+    <xs:attributeGroup ref="BaseAttrs"/>
+  </xs:complexType>
+
+  <xs:complexType name="DerivedType">
+    <xs:complexContent>
+      <xs:restriction base="BaseType">
+        <xs:attributeGroup ref="BaseAttrs" use="prohibited"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="root" type="DerivedType"/>
+</xs:schema>`,
+          xml: `<root legacy="x"/>`
+        },
+        {
+          id: "phase3-2-enum-metadata",
+          label: "98. Phase 3.2 - enumeration annotation metadata",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="StatusType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="ACTIVE">
+        <xs:annotation>
+          <xs:documentation xml:lang="en">Active status</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="INACTIVE"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="status" type="StatusType"/>
+</xs:schema>`,
+          xml: `<status>ACTIVE</status>`
+        },
+        {
+          id: "phase3-2-schema-version-annotation",
+          label: "99. Phase 3.2 - schema version + type annotation",
+          xsd: `<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.1">
+  <xs:complexType name="CustomerType">
+    <xs:annotation>
+      <xs:documentation xml:lang="en">Customer record type</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="customer" type="CustomerType"/>
+</xs:schema>`,
+          xml: `<customer><name>Alice</name></customer>`
         }
       ];
 

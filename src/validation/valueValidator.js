@@ -8,6 +8,13 @@ import {
 import { validateBuiltinType } from "./builtinTypeValidators.js";
 import { validateFacets } from "./facetUtils.js";
 
+function enumerationValue(enumeration) {
+  if (enumeration && typeof enumeration === "object") {
+    return enumeration.value;
+  }
+  return enumeration;
+}
+
 function validateByDeclType(schema, decl, value, kindLabel) {
   const resolvedType =
     kindLabel === "attribute"
@@ -72,7 +79,10 @@ export function validateResolvedValue(schema, resolvedType, value) {
     const effective = getEffectiveSimpleType(schema, resolvedType);
 
     if (effective.enumerations?.length) {
-      const allowed = effective.enumerations.map(String);
+      const allowed = effective.enumerations
+        .map((item) => enumerationValue(item))
+        .filter((item) => item != null)
+        .map(String);
       if (!allowed.includes(String(value))) {
         return {
           ok: false,

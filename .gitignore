@@ -9,3 +9,4 @@ Thumbs.db
 *.tgz
 tests/
 UPGRADE_PLAN.md
+benchmarks/fixtures/*.xml

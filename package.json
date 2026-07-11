@@ -1,6 +1,6 @@
 {
   "name": "uss-xsd-engine",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Browser-first XSD engine for schema diagnostics, tree extraction, sample XML generation, and XML validation.",
   "type": "module",
   "main": "dist/uss-xsd-engine.esm.js",
@@ -33,6 +33,10 @@
     "write": "node scripts/write-version.js",
     "build": "node scripts/build.mjs",
     "test": "node --test \"tests/**/*.test.js\"",
+    "fixtures:streaming": "node scripts/generate-streaming-fixtures.mjs",
+    "fixtures:streaming:target100": "node scripts/generate-streaming-fixtures.mjs --profile target100",
+    "benchmark:streaming": "node scripts/benchmark-streaming.mjs",
+    "benchmark:streaming:target": "node scripts/benchmark-streaming.mjs --xml benchmarks/fixtures/large-valid-target.xml --concurrency 2 --min-throughput-mbps 10 --max-peak-rss-mb 50",
     "clean": "rm -rf dist",
     "check:git": "git diff --quiet && git diff --cached --quiet",
     "version:beta": "npm version prerelease --preid=beta",

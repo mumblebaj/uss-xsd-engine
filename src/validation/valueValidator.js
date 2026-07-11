@@ -27,7 +27,7 @@ function validateByDeclType(schema, decl, value, kindLabel) {
 export function validateElementValue(schema, elementDecl, value) {
   const fixed = elementDecl.fixedValue;
 
-  if (fixed != null) {
+  if (fixed != null && fixed !== "") {
     if (value !== fixed) {
       return {
         ok: false,
@@ -44,7 +44,7 @@ export function validateElementValue(schema, elementDecl, value) {
 export function validateAttributeValue(schema, attrDecl, value) {
   const fixed = attrDecl.fixedValue;
 
-  if (fixed != null) {
+  if (fixed != null && fixed !== "") {
     if (value !== fixed) {
       return {
         ok: false,

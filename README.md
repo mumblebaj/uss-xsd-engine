@@ -26,7 +26,7 @@ Consult the Api Documentation for detailed usage and features:
 
 `uss-xsd-engine` is a standalone JavaScript engine designed to process XML Schema (XSD) directly in the browser.
 
-It is built to power tools like USS XSD Studio while remaining lightweight, dependency-free, and reusable as:
+It is built to power tools like USS XSD Studio while remaining lightweight and reusable as:
 
 - a browser/CDN script
 - an npm package
@@ -84,6 +84,15 @@ It is built to power tools like USS XSD Studio while remaining lightweight, depe
 - Namespace constraint handling including `##any`, `##other`, `##targetNamespace`, exclusions via `notNamespace` and `notQName`
 - Restriction enforcement (runtime)
 - Fixed value enforcement
+- Identity constraints runtime validation (`xs:key`, `xs:keyref`, `xs:unique`)
+
+### ✅ Streaming Validation (v0.3.0)
+- Incremental async API: `validateXmlStream(...)`
+- Chunk-based Node.js interface: `createStreamValidator(...)`
+- Checkpoint/resume for resumable validation workflows
+- Parallel multi-stream validation: `validateXmlStreams(...)`
+- Streaming diagnostics export helper: `createStreamingDiagnosticsExporter(...)`
+- Memory-bounded parser option via `maxBufferBytes`
 
 ### ✅ Include / Import (Groundwork)
 - Recognizes `xs:include` and `xs:import`
@@ -106,7 +115,11 @@ import {
   getSchemaDiagnostics,
   extractSchemaTree,
   generateSampleXml,
-  validateXml
+  validateXml,
+  validateXmlStream,
+  createStreamValidator,
+  validateXmlStreams,
+  createStreamingDiagnosticsExporter
 } from "uss-xsd-engine";
 
 const result = validateXml(schema, xml);
@@ -128,7 +141,7 @@ or
 ```
 
 ### Public API
-All endpoints follow a consistant result format:
+All endpoints follow a consistent result format:
 
 ```JavaScript
 {
@@ -182,6 +195,41 @@ Validates XML against schema.
 Options:
 - `rootElementName`
 - `externalDocuments`
+
+---
+
+`validateXmlStream({ xsdText, xmlStream, options?, checkpoint? })`
+
+Validates XML incrementally from a stream source.
+
+Returns `AsyncIterator<Result>` where each yielded result contains:
+- incremental issues
+- current element path
+- progress (`bytes`, `elements`)
+
+---
+
+`createStreamValidator({ xsdText, options?, checkpoint? })`
+
+Chunk-oriented streaming validator interface for Node.js streams.
+
+Methods:
+- `validateChunk(chunk)`
+- `finalize()`
+- `checkpoint()`
+- `resume(checkpoint)`
+
+---
+
+`validateXmlStreams({ xsdText, xmlStreams, options?, checkpoints?, concurrency? })`
+
+Validates multiple XML streams in parallel and returns an array of final results.
+
+---
+
+`createStreamingDiagnosticsExporter({ format?, includeData?, includeSummary? })`
+
+Collects/exports streaming diagnostics in `ndjson`, `json`, or `array` format.
 
 ---
 
@@ -306,7 +354,7 @@ Use **uss-xsd-engine** if you need:
 ---
 
 ## ⚠️ Supported vs Not Fully Supported
-### ✅ Supported (v0.2.1)
+### ✅ Supported (v0.3.0)
 - XSD parsing into an internal schema model
 - Namespace-aware resolution (elements, types, attributes, groups)
 - Extensions (`xs:extension`)
@@ -324,6 +372,7 @@ Use **uss-xsd-engine** if you need:
   - pattern-aware generation (e.g., UETR, BIC)
 - XML validation:
   - structural validation (sequence, choice, all, groups)
+  - identity constraints (`xs:key`, `xs:keyref`, `xs:unique`)
   - simpleContent + complexContent enforcement
   - mixed content handling
   - restriction validation (pass 2)
@@ -336,6 +385,16 @@ Use **uss-xsd-engine** if you need:
 - QName resolution:
   - prefixed + default namespace handling
   - no cross-namespace leakage
+- Streaming validation APIs:
+  - `validateXmlStream(...)`
+  - `createStreamValidator(...)`
+  - `validateXmlStreams(...)`
+  - `createStreamingDiagnosticsExporter(...)`
+- Resumable validation with checkpoint/restore
+- Memory-bound parser guard with `maxBufferBytes`
+- Streaming benchmark tooling:
+  - fixture generation (`fixtures:streaming`, `fixtures:streaming:target100`)
+  - benchmark runner with threshold checks (`benchmark:streaming`)
 
 ---
 
@@ -344,7 +403,111 @@ Use **uss-xsd-engine** if you need:
   - (engine is intentionally browser-first and caller-driven)
 - Full W3C spec completeness
   - (focus is practical + real-world coverage)
-- Streaming / incremental validation for very large XML
+- Complete XSD 1.0/1.1 coverage targets planned for Phase 5 (for example full list/union support and advanced 1.1 assertions)
+- All Phase 4 benchmark targets are not guaranteed on every runtime/environment out of the box
+
+---
+
+## ⚡ Streaming API Quickstart
+
+Async iterator API:
+
+```javascript
+import fs from "node:fs";
+import { validateXmlStream } from "uss-xsd-engine";
+
+for await (const result of validateXmlStream({
+  xsdText,
+  xmlStream: fs.createReadStream("./large.xml"),
+  options: { rootElementName: "root" }
+})) {
+  if (!result.ok) {
+    console.log(result.issues);
+  }
+}
+```
+
+Chunk-based interface:
+
+```javascript
+import fs from "node:fs";
+import { createStreamValidator } from "uss-xsd-engine";
+
+const validator = createStreamValidator({ xsdText, options: { maxBufferBytes: 1024 * 1024 } });
+const stream = fs.createReadStream("./large.xml");
+
+stream.on("data", (chunk) => {
+  const result = validator.validateChunk(chunk);
+  if (result.issues.length) console.log(result.issues);
+});
+
+stream.on("end", () => {
+  console.log(validator.finalize());
+});
+```
+
+Parallel validation and diagnostics export:
+
+```javascript
+import fs from "node:fs";
+import {
+  validateXmlStreams,
+  createStreamingDiagnosticsExporter,
+} from "uss-xsd-engine";
+
+const exporter = createStreamingDiagnosticsExporter({ format: "ndjson" });
+
+const results = await validateXmlStreams({
+  xsdText,
+  xmlStreams: [
+    fs.createReadStream("./a.xml"),
+    fs.createReadStream("./b.xml"),
+  ],
+  concurrency: 2,
+});
+
+results.forEach((result, idx) => exporter.write(result, { streamIndex: idx }));
+console.log(exporter.flush());
+```
+
+---
+
+## 🚀 Streaming Benchmark Quickstart
+
+Phase 4.3 includes benchmark tooling for streaming validation throughput and memory checks.
+
+Generate fixtures:
+
+```bash
+npm run fixtures:streaming
+```
+
+Generate target-size fixtures (100MB profile):
+
+```bash
+npm run fixtures:streaming:target100
+```
+
+Run benchmark:
+
+```bash
+npm run benchmark:streaming -- --xml benchmarks/fixtures/large-valid-small.xml --concurrency 2
+```
+
+Run benchmark with pass/fail thresholds (non-zero exit code when checks fail):
+
+```bash
+npm run benchmark:streaming -- \
+  --xml benchmarks/fixtures/large-valid-target.xml \
+  --min-throughput-mbps 10 \
+  --max-peak-rss-mb 50
+```
+
+Use preset target command:
+
+```bash
+npm run benchmark:streaming:target
+```
 
 ---
 

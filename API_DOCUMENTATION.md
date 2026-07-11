@@ -36,6 +36,9 @@ The library follows a layered architecture with clear separation of concerns:
 - **`facetUtils.js`**: Facet validation utilities
 - **`structureValidator.js`**: XML structure validation
 - **`identityConstraintValidator.js`**: Identity constraint enforcement during XML validation
+- **`streamingValidator.js`**: Streaming validation APIs and orchestration
+- **`streamingState.js`**: Incremental validation state machine
+- **`xmlStreamParser.js`**: Event-based streaming XML parser wrapper
 - **`validateXmlAgainstSchema.js`**: Main XML validation orchestrator
 - **`valueValidator.js`**: Value constraint validation
 - **`xmlDiagnostics.js`**: XML parsing diagnostics
@@ -249,6 +252,105 @@ if (result.ok && result.data.xmlValid) {
 } else {
   console.log('Validation issues:', result.issues);
 }
+```
+
+### validateXmlStream
+
+Validates XML incrementally from stream-like inputs.
+
+**Parameters:**
+- `xsdText` (string): The XSD schema content
+- `xmlStream` (AsyncIterable | ReadableStream | EventEmitter): XML input stream
+- `options` (object, optional):
+  - `rootElementName` (string): Expected root element name
+  - `externalDocuments` (object): External schema documents
+  - `maxBufferBytes` (number): Optional memory guard for parser buffering
+- `checkpoint` (object, optional): Resume checkpoint from previous streaming run
+
+**Returns:**
+- `AsyncIterator<Result>`: Incremental validation results containing:
+  - `data.xmlValid` (boolean)
+  - `data.elementPath` (string)
+  - `data.progress` (`{ bytes, elements }`)
+
+**Example:**
+```javascript
+import fs from 'node:fs';
+import { validateXmlStream } from 'uss-xsd-engine';
+
+for await (const result of validateXmlStream({
+  xsdText,
+  xmlStream: fs.createReadStream('./large.xml'),
+  options: { rootElementName: 'root', maxBufferBytes: 1024 * 1024 }
+})) {
+  if (!result.ok) {
+    console.log(result.issues);
+  }
+}
+```
+
+### createStreamValidator
+
+Chunk-based streaming interface for Node.js and manual chunk workflows.
+
+**Parameters:**
+- `xsdText` (string): The XSD schema content
+- `options` (object, optional): Same as `validateXmlStream` options
+- `checkpoint` (object, optional): Resume state from `checkpoint()` output
+
+**Returns:**
+- Validator object with:
+  - `validateChunk(chunk)`
+  - `finalize()`
+  - `checkpoint()`
+  - `resume(checkpoint)`
+
+**Example:**
+```javascript
+import fs from 'node:fs';
+import { createStreamValidator } from 'uss-xsd-engine';
+
+const validator = createStreamValidator({ xsdText, options: { rootElementName: 'root' } });
+const stream = fs.createReadStream('./large.xml');
+
+stream.on('data', (chunk) => {
+  const result = validator.validateChunk(chunk);
+  if (result.issues.length) console.log(result.issues);
+});
+
+stream.on('end', () => {
+  console.log(validator.finalize());
+});
+```
+
+### validateXmlStreams
+
+Runs multiple XML stream validations in parallel.
+
+**Parameters:**
+- `xsdText` (string): The XSD schema content
+- `xmlStreams` (Array): Stream inputs
+- `options` (object, optional): Streaming options
+- `checkpoints` (Array, optional): Checkpoints aligned to stream positions
+- `concurrency` (number, optional): Worker concurrency (default: 4)
+
+**Returns:**
+- `Promise<Result[]>`: Final per-stream results
+
+### createStreamingDiagnosticsExporter
+
+Collects and exports streaming diagnostics in structured formats.
+
+**Parameters:**
+- `format` (`"ndjson" | "json" | "array"`, optional): Output format (default: `ndjson`)
+- `includeData` (boolean, optional): Include result `data` payload (default: true)
+- `includeSummary` (boolean, optional): Include result `summary` payload (default: true)
+
+**Returns:**
+- Exporter object with:
+  - `write(result, meta?)`
+  - `flush()`
+  - `reset()`
 
 ### Identity Constraint Example
 
@@ -343,6 +445,14 @@ if (!result.ok) {
 - `processContents` support (`strict`, `lax`, `skip`)
 - Namespace constraint support: `##any`, `##other`, `##targetNamespace`, explicit namespace lists
 - Wildcard exclusions via `notNamespace` and `notQName`
+
+### Streaming Validation
+- Incremental stream validation via async iterator (`validateXmlStream`)
+- Chunk-based validator interface (`createStreamValidator`)
+- Checkpoint/resume support for long-running validations
+- Parallel multi-stream validation (`validateXmlStreams`)
+- Streaming diagnostics export (`createStreamingDiagnosticsExporter`)
+- Optional parser memory guard (`maxBufferBytes`)
 
 ### Include/Import Support
 - `xs:include` and `xs:import` recognition
@@ -456,19 +566,6 @@ The library uses standardized issue codes for consistent error reporting:
 - `XML_UNIQUE_VIOLATION`: Duplicate unique constraint value
 - `XML_ANY_STRICT_VALIDATION_FAILED`: `xs:any` content failed strict wildcard validation
 - `XML_ANYATTRIBUTE_STRICT_VALIDATION_FAILED`: `xs:anyAttribute` content failed strict wildcard validation
-- `XML_UNKNOWN_ROOT_ELEMENT`: Root element not defined in schema
-- `XML_UNEXPECTED_ELEMENT`: Element not allowed at this position
-- `XML_MISSING_REQUIRED_ELEMENT`: Required element missing
-- `XML_CHOICE_NOT_SATISFIED`: Choice group requirements not met
-- `XML_UNEXPECTED_ATTRIBUTE`: Attribute not allowed
-- `XML_MISSING_REQUIRED_ATTRIBUTE`: Required attribute missing
-- `XML_INVALID_TEXT_FOR_COMPLEX_TYPE`: Text content not allowed
-- `XML_VALUE_INVALID`: Value doesn't match type constraints
-- `XML_ENUMERATION_MISMATCH`: Value not in allowed enumeration
-- `XML_KEY_VIOLATION`: Duplicate key or unique value violation
-- `XML_KEY_NULL_VIOLATION`: Key constraint field value is missing or empty
-- `XML_KEYREF_VIOLATION`: Keyref points to a missing reference value
-- `XML_UNIQUE_VIOLATION`: Duplicate unique constraint value
 
 ### Facet Validation Issues
 - `XML_PATTERN_MISMATCH`: Value doesn't match pattern
@@ -492,13 +589,43 @@ The library uses standardized issue codes for consistent error reporting:
 - No heavy dependencies
 - Efficient parsing and validation algorithms
 - Suitable for real-time schema processing
+- Streaming benchmark tooling is available for throughput and memory profiling
+- Threshold-based benchmark gating is supported via benchmark script flags
 
 ## Limitations
 
 - Not a complete XSD 1.0/1.1 validator
 - Some advanced features still in development
 - Identity constraint support is available, but XPath evaluation is intentionally simplified to common selector/field patterns and may not cover full XPath 1.0 semantics
-- Streaming validation not implemented
+- Streaming benchmark targets can vary by environment/runtime characteristics
+
+## Streaming Benchmark Tooling
+
+The repository includes benchmark tooling to measure streaming throughput and memory behavior.
+
+### Fixture Generation
+
+```bash
+npm run fixtures:streaming
+npm run fixtures:streaming:target100
+```
+
+### Benchmark Execution
+
+```bash
+npm run benchmark:streaming -- --xml benchmarks/fixtures/large-valid-small.xml --concurrency 2
+```
+
+### Threshold Gating
+
+```bash
+npm run benchmark:streaming -- \
+  --xml benchmarks/fixtures/large-valid-target.xml \
+  --min-throughput-mbps 10 \
+  --max-peak-rss-mb 50
+```
+
+When thresholds are not met, benchmark script exits with non-zero code.
 
 ## Examples and Best Practices
 

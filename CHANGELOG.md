@@ -1,5 +1,168 @@
 # Changelog
 
+## [0.3.0] - 2026-07-11
+
+## Phase 4.1 Start: Streaming Validation Foundation and Boundary Hardening ⭐
+
+### Summary
+Started Phase 4.1 from the upgrade plan by introducing a streaming XML validation pipeline for large documents. This includes incremental parsing, stateful validation, initial sequence-order enforcement, occurrence checks, and chunk-boundary robustness improvements.
+
+### What Changed
+
+#### Streaming Validation API
+- Added `validateXmlStream({ xsdText, xmlStream, options })` async iterator API
+- Added `createStreamValidator({ xsdText, options })` incremental API
+- Added streaming validator lifecycle support for `validateChunk()`, `finalize()`, and checkpoint/resume state transfer
+
+#### Streaming Parser Foundation
+- Added SAX-like streaming parser with start-element, end-element, text, and progress events
+- Added parser support for comments, processing instructions, CDATA, and doctype skipping
+- Added progress tracking (`bytes`, `elements`) during stream processing
+
+#### Phase 4.1 Structural Validation
+- Added state-machine-based streaming validation context
+- Added root element matching for streaming input
+- Added incremental unexpected-element detection
+- Added incremental `xs:sequence` ordering enforcement
+- Added incremental `maxOccurs` bound enforcement
+- Added required-child validation on element close/finalization
+
+#### Chunk Boundary and UTF-8 Hardening
+- Added robust handling for heavily split XML tag boundaries across chunks
+- Added persistent UTF-8 decode state using streaming `TextDecoder` mode
+- Added decoder flush at stream end to correctly process trailing split multibyte sequences
+
+#### Phase 4.2 Streaming API Enhancements
+- Added portable checkpoint/resume support across validator instances
+- Added `checkpoint` input support to `validateXmlStream(...)` for async iterator resume
+- Added parser-level checkpoint capture/restore (`buffer`, progress, parser end-state)
+- Added compatibility for EventEmitter sources that expose `removeListener()` instead of `off()`
+- Improved fixed-value handling so empty-string defaults do not mask facet/attribute validation in streaming paths
+
+#### Phase 4.3 Advanced Streaming (Initial Delivery)
+- Added memory-bounded parser behavior via `maxBufferBytes` limits in streaming options
+- Added parallel multi-document validation helper: `validateXmlStreams(...)`
+- Added streaming diagnostics exporter: `createStreamingDiagnosticsExporter(...)`
+- Added benchmark fixture generation tooling for large XML scenarios
+- Added benchmark runner with throughput + memory metrics and threshold pass/fail gating
+- Added 100MB fixture profile support (`--profile target100`) for target validation runs
+
+### Usage Examples
+
+#### Async Streaming API (`validateXmlStream`)
+```javascript
+import fs from "node:fs";
+import { validateXmlStream } from "uss-xsd-engine";
+
+const xmlStream = fs.createReadStream("./large.xml", { encoding: "utf8" });
+
+for await (const result of validateXmlStream({
+  xsdText,
+  xmlStream,
+  options: { rootElementName: "root" }
+})) {
+  for (const issue of result.issues) {
+    console.log(issue.code, issue.message);
+  }
+
+  console.log(result.data.elementPath, result.data.progress);
+}
+```
+
+#### Node.js Chunk Interface (`createStreamValidator`)
+```javascript
+import fs from "node:fs";
+import { createStreamValidator } from "uss-xsd-engine";
+
+const validator = createStreamValidator({ xsdText, options: { rootElementName: "root" } });
+const xmlStream = fs.createReadStream("./large.xml", { encoding: "utf8" });
+
+xmlStream.on("data", (chunk) => {
+  const { issues, progress } = validator.validateChunk(chunk);
+  if (issues.length) console.log("chunk issues", issues.length, progress);
+});
+
+xmlStream.on("end", () => {
+  const { issues, progress } = validator.finalize();
+  console.log("final issues", issues.length, progress);
+});
+```
+
+#### Resume from Checkpoint
+```javascript
+import { createStreamValidator } from "uss-xsd-engine";
+
+const v1 = createStreamValidator({ xsdText });
+v1.validateChunk("<root><a></a><");
+const checkpoint = v1.checkpoint();
+
+const v2 = createStreamValidator({ xsdText, checkpoint });
+v2.validateChunk("b></b></root>");
+const final = v2.finalize();
+console.log(final.issues);
+```
+
+#### Benchmark Tooling
+
+Generate fixtures (default + target profile):
+
+```bash
+npm run fixtures:streaming
+npm run fixtures:streaming:target100
+```
+
+Run benchmark (single + parallel metrics):
+
+```bash
+npm run benchmark:streaming -- --xml benchmarks/fixtures/large-valid-small.xml --concurrency 2
+```
+
+Run benchmark with threshold gating (non-zero exit when checks fail):
+
+```bash
+npm run benchmark:streaming -- \
+  --xml benchmarks/fixtures/large-valid-target.xml \
+  --min-throughput-mbps 10 \
+  --max-peak-rss-mb 50
+```
+
+Target preset:
+
+```bash
+npm run benchmark:streaming:target
+```
+
+#### Testing
+- Added streaming test coverage for:
+  - basic incremental validation and finalization
+  - missing required children
+  - async stream consumption
+  - `xs:sequence` order enforcement
+  - `maxOccurs` overflow handling
+  - split-tag boundary stress cases
+  - split UTF-8 multibyte chunk decoding
+  - facet and attribute value validation during streaming
+  - checkpoint/resume behavior for both sync and async APIs
+  - EventEmitter cleanup compatibility (`off`/`removeListener`)
+  - `maxBufferBytes` memory-bound guard behavior
+  - parallel streaming validation helper behavior
+  - diagnostics exporter formatting behavior
+
+### Files Modified
+- `src/index.js`
+- `src/validation/streamingValidator.js`
+- `src/validation/streamingState.js`
+- `src/validation/xmlStreamParser.js`
+- `src/validation/valueValidator.js`
+- `scripts/generate-streaming-fixtures.mjs`
+- `scripts/benchmark-streaming.mjs`
+- `benchmarks/fixtures/streaming-benchmark.xsd`
+- `benchmarks/README.md`
+- `.gitignore`
+- `package.json`
+- `tests/streaming/streamValidator.test.js`
+- `CHANGELOG.md`
+
 ## [0.2.3] - 2026-06-24
 
 ## Phase 3.2 Completion: Restriction-Prohibited Enforcement and Enumeration Metadata ⭐

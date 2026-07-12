@@ -245,7 +245,6 @@ This release improves schema composition behavior and metadata coverage while ad
 - `src/model/schemaModel.js`
 - `src/diagnostics/issueCodes.js`
 - `playground.html`
-- `verify-redefine.mjs`
 - `README.md`
 - `CHANGELOG.md`
 - `package.json`

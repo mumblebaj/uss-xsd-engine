@@ -12,6 +12,12 @@ Browser-first XSD engine for schema diagnostics, tree extraction, sample XML gen
 
 ---
 
+If you appreciate this library and you want to support my work:
+
+<a href="https://www.buymeacoffee.com/mumblebaj" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Beer" style="height: 45px !important;width: 180px !important;" ></a>
+
+---
+
 > 📦 Latest release: See full details in [GitHub Releases](https://github.com/mumblebaj/uss-xsd-engine/releases)
 
 ---

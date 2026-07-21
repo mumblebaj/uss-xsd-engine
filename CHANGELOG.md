@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.1] - 2026-07-21
+
+## Patch: Wildcard Sequence Consumption and Choice-Branch Validation Fixes ⭐
+
+### Summary
+Patch release focused on XML validation correctness in non-streaming mode. This release fixes two behavior gaps discovered during SAA schema validation: repeated `xs:any` wildcard handling in `SwAny`-style bodies, and loss of nested validation issues inside selected `xs:choice` branches.
+
+### What Changed
+
+#### Wildcard Content Model Fix (`xs:any`)
+- Fixed `xs:any` handling to consume consecutive matching child elements according to `minOccurs` / `maxOccurs`.
+- Prevented false `XML_UNEXPECTED_ELEMENT` errors when wildcard declarations allow multiple children (for example, `AppHdr` + `Document` under `Body`).
+- Added required wildcard coverage when `minOccurs` is not satisfied.
+
+#### Choice Branch Validation Fix (`xs:choice`)
+- Fixed choice matching flow so validation issues from the selected branch are preserved.
+- Branch probing remains speculative, but the chosen branch is now revalidated in non-silent mode to keep real errors.
+- Ensures nested type validation failures (including `xs:boolean` lexical checks) are reported inside matched choice branches.
+
+#### Regression Coverage
+- Added smoke regression for unbounded wildcard body acceptance.
+- Added smoke regression for uppercase boolean rejection inside a selected choice branch.
+- Updated test harness to use DOM parser polyfill parity for reliable traversal behavior.
+
+### Files Modified
+- `src/validation/structureValidator.js`
+- `tests/smoke/wildcardAndBooleanValidation.test.js`
+- `CHANGELOG.md`
+
 ## [0.3.0] - 2026-07-11
 
 ## Phase 4.1 Start: Streaming Validation Foundation and Boundary Hardening ⭐

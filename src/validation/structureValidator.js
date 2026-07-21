@@ -488,7 +488,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
   let index = startIndex;
 
   while (count < max) {
-    let matchedBranches = [];
+    const matchedBranches = [];
 
     for (const childDecl of choiceNode.children || []) {
       const snapshotIssuesLength = context.issues.length;
@@ -496,7 +496,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
 
       if (result.matchedAny) {
         context.issues.length = snapshotIssuesLength;
-        matchedBranches.push(result);
+        matchedBranches.push({ result, childDecl });
       }
       else {
         context.issues.length = snapshotIssuesLength;
@@ -522,7 +522,18 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
     }
 
     const matchedBranch = matchedBranches[0];
-    index = matchedBranch.nextIndex;
+    // Re-run the selected branch in non-silent mode so real validation
+    // issues from that branch are preserved.
+    const selectedResult = validateContentModel(
+      children,
+      matchedBranch.childDecl,
+      context,
+      pathParts,
+      index,
+      silent,
+    );
+
+    index = selectedResult.nextIndex;
     count += 1;
   }
 
@@ -704,25 +715,71 @@ export function validateContentModel(children, modelNode, context, pathParts, st
       return validateAll(children, startIndex, modelNode, context, pathParts, silent);
 
     case "any":
-      if (startIndex < children.length) {
-        const childNode = children[startIndex];
-        const childLocalName = localName(childNode);
-        const childNamespace = namespaceUri(childNode);
-        
-        if (elementMatchesWildcard(childLocalName, childNamespace, modelNode, context.schema.targetNamespace)) {
+      {
+        const min = repeatMin(modelNode.minOccurs);
+        const max = repeatMax(modelNode.maxOccurs);
+        let index = startIndex;
+        let count = 0;
+
+        while (index < children.length && count < max) {
+          const childNode = children[index];
+          const childLocalName = localName(childNode);
+          const childNamespace = namespaceUri(childNode);
+
+          if (
+            !elementMatchesWildcard(
+              childLocalName,
+              childNamespace,
+              modelNode,
+              context.schema.targetNamespace,
+            )
+          ) {
+            break;
+          }
+
           // Element matches wildcard - validate based on processContents
           if (isStrictWildcardValidation(modelNode.processContents)) {
             // Strict mode: attempt to validate element structure
-            validateElementDecl(childNode, { name: childLocalName, typeName: null }, context, [...pathParts, childLocalName]);
+            validateElementDecl(
+              childNode,
+              { name: childLocalName, typeName: null },
+              context,
+              [...pathParts, childLocalName],
+            );
           } else if (!shouldSkipWildcardValidation(modelNode.processContents)) {
             // Lax mode: validate if schema available, but don't fail if not
             // For now, we just accept the element
           }
-          // Skip mode: just accept the element without validation
-          return { nextIndex: startIndex + 1, matched: true, matchedAny: true };
+
+          index += 1;
+          count += 1;
         }
+
+        if (count < min && !silent) {
+          context.issues.push(
+            context.createIssue({
+              code: context.ISSUE_CODES.XML_MISSING_REQUIRED_ELEMENT,
+              severity: "error",
+              message: "Required wildcard content is missing.",
+              ...getLocationFields(context, context.currentXmlNode),
+              path: buildXmlPath(pathParts),
+              source: "xml",
+              nodeKind: "any",
+              name: null,
+              details: {
+                minOccurs: modelNode.minOccurs,
+                actualCount: count,
+              },
+            }),
+          );
+        }
+
+        return {
+          nextIndex: index,
+          matched: count >= min,
+          matchedAny: count > 0,
+        };
       }
-      return { nextIndex: startIndex, matched: true, matchedAny: false };
 
     default:
       return { nextIndex: startIndex, matched: true, matchedAny: false };

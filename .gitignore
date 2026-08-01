@@ -9,3 +9,6 @@ Thumbs.db
 *.tgz
 UPGRADE_PLAN.md
 benchmarks/fixtures/*.xml
+docs/
+SAA_XML_v2_0_15.xsd
+GITHUB_RELEASE_v-.3.1.md

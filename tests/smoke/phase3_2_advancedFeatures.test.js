@@ -128,3 +128,34 @@ test("phase 3.2: enumeration metadata includes annotation on restriction value",
   );
   assert.equal(statusType.enumerations[1].value, "INACTIVE");
 });
+
+test("phase 5.3: ambiguous xs:choice branches emit a warning and remain deterministic", () => {
+  const xsd = `
+    <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:any namespace="##any" processContents="skip"/>
+            <xs:element name="explicit" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  `;
+
+  const schema = parseSchemaFromText(xsd);
+  const invalid = validateXmlAgainstSchema(
+    schema,
+    "<root><explicit>value</explicit></root>",
+    { rootElementName: "root" },
+    { DOMParser },
+  );
+
+  const warning = invalid.issues.find(
+    (issue) => issue.code === ISSUE_CODES.XML_CONTENT_MODEL_AMBIGUOUS,
+  );
+
+  assert.ok(warning, "an ambiguity warning should be emitted");
+  assert.equal(warning.severity, "warning");
+  assert.equal(invalid.issues.some((issue) => issue.code === ISSUE_CODES.XML_CHOICE_MULTIPLE_BRANCHES), false);
+});

@@ -9,6 +9,7 @@ import {
 import {
   validateAttributes,
   validateContentModel,
+  validateTypeDerivationControls,
 } from "./structureValidator.js";
 import { validateIdentityConstraints } from "./identityConstraintValidator.js";
 import {
@@ -228,6 +229,8 @@ export function validateXmlAgainstSchema(
       currentComplexType: resolvedRootType,
       currentXmlNode: xmlRoot,
     };
+
+    validateTypeDerivationControls(xmlRoot, resolvedRootType, rootContext);
 
     validateAttributes(
       xmlRoot,

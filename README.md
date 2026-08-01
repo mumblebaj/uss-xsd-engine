@@ -58,6 +58,7 @@ It is built to power tools like USS XSD Studio while remaining lightweight and r
 ### ✅ Schema Tree Extraction
 - Semantic tree representation of XSD
 - Expandable references and structure traversal
+- Exposes annotation payloads (documentation, appinfo, processing instructions) on relevant tree nodes
 - Useful for UI rendering and schema exploration
 
 ### ✅ Sample XML Generation
@@ -85,14 +86,18 @@ It is built to power tools like USS XSD Studio while remaining lightweight and r
 - Mixed content enforcement
 - Attribute validation
 - Facet validation (pattern, length, numeric, etc.)
+- Compound simple-type support for `xs:list` and `xs:union`
 - Wildcard support for `xs:any` and `xs:anyAttribute`
 - `processContents` support (`strict`, `lax`, `skip`)
 - Namespace constraint handling including `##any`, `##other`, `##targetNamespace`, exclusions via `notNamespace` and `notQName`
+- Ambiguity warnings for competing `xs:choice` branches
 - Restriction enforcement (runtime)
+- Derivation-control enforcement for abstract elements, substitution groups, and final-type derivations
+- Comprehensive Phase 5.6 compliance coverage for namespace edge cases, QName resolution, schema composition, substitution-group chains, and attribute wildcard interactions
 - Fixed value enforcement
 - Identity constraints runtime validation (`xs:key`, `xs:keyref`, `xs:unique`)
 
-### ✅ Streaming Validation (v0.3.0)
+### ✅ Streaming Validation (v1.0.0)
 - Incremental async API: `validateXmlStream(...)`
 - Chunk-based Node.js interface: `createStreamValidator(...)`
 - Checkpoint/resume for resumable validation workflows
@@ -360,7 +365,7 @@ Use **uss-xsd-engine** if you need:
 ---
 
 ## ⚠️ Supported vs Not Fully Supported
-### ✅ Supported (v0.3.0)
+### ✅ Supported (v1.0.0 / Phase 5.6)
 - XSD parsing into an internal schema model
 - Namespace-aware resolution (elements, types, attributes, groups)
 - Extensions (`xs:extension`)
@@ -391,6 +396,11 @@ Use **uss-xsd-engine** if you need:
 - QName resolution:
   - prefixed + default namespace handling
   - no cross-namespace leakage
+- Phase 5.6 compliance hardening:
+  - substitution-group chain validation
+  - namespace-safe QName resolution across schema contexts
+  - include/import/redefine composition handling
+  - wildcard-driven attribute acceptance and rejection semantics
 - Streaming validation APIs:
   - `validateXmlStream(...)`
   - `createStreamValidator(...)`

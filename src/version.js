@@ -1,1 +1,1 @@
-export const ENGINE_VERSION = "v0.3.1";
+export const ENGINE_VERSION = "v1.0.0";

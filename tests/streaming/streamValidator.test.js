@@ -72,6 +72,25 @@ const ATTRIBUTE_XSD = `
   </xs:schema>
 `;
 
+const COMPOUND_SIMPLE_XSD = `
+  <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+    <xs:simpleType name="fruitList">
+      <xs:list itemType="xs:integer"/>
+    </xs:simpleType>
+    <xs:simpleType name="statusOrCode">
+      <xs:union memberTypes="xs:integer xs:date"/>
+    </xs:simpleType>
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="listValue" type="fruitList"/>
+          <xs:element name="unionValue" type="statusOrCode"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </xs:schema>
+`;
+
 test("createStreamValidator validates chunks and finalizes", () => {
   const validator = createStreamValidator({ xsdText: SIMPLE_XSD });
 
@@ -193,6 +212,16 @@ test("createStreamValidator performs attribute validation during streaming", () 
   const validator = createStreamValidator({ xsdText: ATTRIBUTE_XSD });
 
   const step = validator.validateChunk("<root><item id=\"abc\"/></root>");
+  const final = validator.finalize();
+
+  const codes = [...step.issues, ...final.issues].map((issue) => issue.code);
+  assert.ok(codes.includes(ISSUE_CODES.XML_VALUE_INVALID));
+});
+
+test("createStreamValidator validates compound simple types during streaming", () => {
+  const validator = createStreamValidator({ xsdText: COMPOUND_SIMPLE_XSD });
+
+  const step = validator.validateChunk("<root><listValue>1 apple</listValue><unionValue>ready</unionValue></root>");
   const final = validator.finalize();
 
   const codes = [...step.issues, ...final.issues].map((issue) => issue.code);

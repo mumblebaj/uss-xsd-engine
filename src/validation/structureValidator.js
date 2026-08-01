@@ -1,8 +1,13 @@
 import {
   getEffectiveAttributes,
   getEffectiveContent,
+  makeLookupKey,
+  parseQName,
   resolveElementType,
-  resolveGroup
+  resolveGlobalComplexType,
+  resolveGlobalElement,
+  resolveGlobalSimpleType,
+  resolveGroup,
 } from "../resolver/schemaResolvers.js";
 import {
   elementMatchesWildcard,
@@ -39,18 +44,86 @@ function repeatMax(maxOccurs) {
   return maxOccurs === "unbounded" ? Infinity : maxOccurs;
 }
 
-function matchesElementDecl(xmlNode, elementDecl) {
+function resolveDeclaredElement(elementDecl, context) {
+  if (!elementDecl?.refName) return elementDecl || null;
+  return resolveGlobalElement(context?.schema, elementDecl.refName) || elementDecl;
+}
+
+function sameElementDeclarationName(leftDecl, rightDecl) {
+  if (!leftDecl || !rightDecl) return false;
+
+  const leftName = leftDecl.qName || leftDecl.name || leftDecl.refName || null;
+  const rightName = rightDecl.qName || rightDecl.name || rightDecl.refName || null;
+  const leftTarget = parseQName(leftName);
+  const rightTarget = parseQName(rightName);
+
+  if (leftTarget.localName !== rightTarget.localName) {
+    return false;
+  }
+
+  const leftNamespace = leftDecl.namespaceUri || null;
+  const rightNamespace = rightDecl.namespaceUri || null;
+
+  if (leftNamespace == null || rightNamespace == null) {
+    return true;
+  }
+
+  return leftNamespace === rightNamespace;
+}
+
+function isSubstitutionGroupMatch(actualDecl, expectedDecl, schema, visited = new Set()) {
+  if (!actualDecl || !expectedDecl) return false;
+  if (visited.has(actualDecl)) return false;
+
+  visited.add(actualDecl);
+
+  if (sameElementDeclarationName(actualDecl, expectedDecl)) {
+    return true;
+  }
+
+  const substitutionGroupName = actualDecl.substitutionGroup;
+  if (!substitutionGroupName) {
+    return false;
+  }
+
+  const substitutionGroupTarget = resolveGlobalElement(schema, substitutionGroupName);
+  if (!substitutionGroupTarget) {
+    return false;
+  }
+
+  return isSubstitutionGroupMatch(
+    substitutionGroupTarget,
+    expectedDecl,
+    schema,
+    visited,
+  );
+}
+
+function matchesElementDecl(xmlNode, elementDecl, context) {
   const xmlName = localName(xmlNode);
   const xmlNs = namespaceUri(xmlNode);
+  const resolvedDecl = resolveDeclaredElement(elementDecl, context);
 
-  const declName = elementDecl.refName || elementDecl.name;
+  if (!resolvedDecl) return false;
+
+  const declName = resolvedDecl.refName || resolvedDecl.name;
   const declLocal = declName?.includes(":") ? declName.split(":")[1] : declName;
-  const declNs = elementDecl.namespaceUri || null;
+  const declNs = resolvedDecl.namespaceUri || null;
 
-  if (xmlName !== declLocal) return false;
-  if (declNs == null) return true;
+  if (xmlName === declLocal) {
+    if (declNs == null) return true;
+    return xmlNs === declNs;
+  }
 
-  return xmlNs === declNs;
+  const resolvedElement = context?.schema?.globals?.elements?.[
+    makeLookupKey(xmlNs, xmlName)
+  ];
+
+  if (!resolvedDecl || !resolvedElement) {
+    return false;
+  }
+
+  return isSubstitutionGroupMatch(resolvedElement, resolvedDecl, context?.schema);
 }
 
 function buildXmlPath(pathParts) {
@@ -323,8 +396,41 @@ function validateMixedContent(xmlNode, complexTypeDecl, context, pathParts) {
   }
 }
 
+export function validateTypeDerivationControls(xmlNode, complexTypeDecl, context) {
+  if (!complexTypeDecl?.derivation?.kind || !complexTypeDecl.derivation.baseTypeName) {
+    return;
+  }
+
+  const base =
+    resolveGlobalComplexType(context.schema, complexTypeDecl.derivation.baseTypeName) ||
+    resolveGlobalSimpleType(context.schema, complexTypeDecl.derivation.baseTypeName) ||
+    null;
+  if (!base) return;
+
+  const finalControls = Array.isArray(base.final) ? base.final : [];
+  const derivationKind = complexTypeDecl.derivation.kind;
+
+  if (finalControls.includes(derivationKind)) {
+    context.issues.push(
+      context.createIssue({
+        code: context.ISSUE_CODES.XML_FINAL_TYPE_VIOLATION,
+        severity: "error",
+        message: `Type '${complexTypeDecl.name || complexTypeDecl.qName || complexTypeDecl.derivation.baseTypeName}' cannot derive via '${derivationKind}' because the base type is final for that derivation.`,
+        ...getLocationFields(context, xmlNode),
+        path: buildXmlPath(context.pathParts || []),
+        source: "xml",
+        nodeKind: "complexType",
+        name: complexTypeDecl.name || complexTypeDecl.qName || null,
+        details: { baseTypeName: complexTypeDecl.derivation.baseTypeName, derivationKind },
+      }),
+    );
+  }
+}
+
 function validateComplexElement(xmlNode, complexTypeDecl, context) {
   const { schema, createIssue, ISSUE_CODES, issues, pathParts } = context;
+
+  validateTypeDerivationControls(xmlNode, complexTypeDecl, context);
 
   const attributes = getEffectiveAttributes(schema, complexTypeDecl);
   validateAttributes(xmlNode, attributes, context);
@@ -382,6 +488,25 @@ function validateComplexElement(xmlNode, complexTypeDecl, context) {
 }
 
 function validateElementDecl(xmlNode, elementDecl, context, pathParts) {
+  const resolvedDecl = resolveDeclaredElement(elementDecl, context);
+  const isAbstract = Boolean(resolvedDecl?.abstract);
+
+  if (isAbstract) {
+    context.issues.push(
+      context.createIssue({
+        code: context.ISSUE_CODES.XML_ABSTRACT_ELEMENT,
+        severity: "error",
+        message: `Element '${resolvedDecl.name || resolvedDecl.refName || localName(xmlNode)}' is abstract and cannot appear in instance content.`,
+        ...getLocationFields(context, xmlNode),
+        path: buildXmlPath(pathParts),
+        source: "xml",
+        nodeKind: "element",
+        name: resolvedDecl.name || resolvedDecl.refName || localName(xmlNode),
+        details: {},
+      }),
+    );
+  }
+
   const resolvedType = resolveElementType(context.schema, elementDecl);
 
   if (!resolvedType) return;
@@ -411,7 +536,7 @@ function consumeMatchingElement(children, startIndex, elementDecl, context, path
 
   while (
     index < children.length &&
-    matchesElementDecl(children[index], elementDecl) &&
+    matchesElementDecl(children[index], elementDecl, context) &&
     count < max
   ) {
     const childNode = children[index];
@@ -480,6 +605,34 @@ function validateGroupRef(children, startIndex, groupRefNode, context, pathParts
   return { nextIndex: index, matched: count >= min };
 }
 
+function choiceBranchMatches(childDecl, childNode, context) {
+  if (!childDecl || !childNode) return false;
+
+  if (childDecl.kind === "element") {
+    return matchesElementDecl(childNode, childDecl, context);
+  }
+
+  if (childDecl.kind === "any") {
+    return elementMatchesWildcard(
+      localName(childNode),
+      namespaceUri(childNode),
+      childDecl,
+      context.schema?.targetNamespace,
+    );
+  }
+
+  if (childDecl.kind === "groupRef") {
+    const group = resolveGroup(context.schema, childDecl.refName);
+    return Boolean(group?.content && choiceBranchMatches(group.content, childNode, context));
+  }
+
+  if (childDecl.kind === "sequence" || childDecl.kind === "choice" || childDecl.kind === "all") {
+    return (childDecl.children || []).some((grandChild) => choiceBranchMatches(grandChild, childNode, context));
+  }
+
+  return false;
+}
+
 function validateChoice(children, startIndex, choiceNode, context, pathParts, silent = false) {
   const min = repeatMin(choiceNode.minOccurs);
   const max = repeatMax(choiceNode.maxOccurs);
@@ -494,7 +647,7 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
       const snapshotIssuesLength = context.issues.length;
       const result = validateContentModel(children, childDecl, context, pathParts, index, true);
 
-      if (result.matchedAny) {
+      if (result.matchedAny || choiceBranchMatches(childDecl, children[index], context)) {
         context.issues.length = snapshotIssuesLength;
         matchedBranches.push({ result, childDecl });
       }
@@ -505,13 +658,16 @@ function validateChoice(children, startIndex, choiceNode, context, pathParts, si
 
     if (matchedBranches.length === 0) break;
 
-    if (matchedBranches.length > 1 && !silent) {
+    const childNode = children[index];
+    const ambiguousMatches = matchedBranches.filter(({ childDecl }) => choiceBranchMatches(childDecl, childNode, context));
+
+    if (ambiguousMatches.length > 1 && !silent) {
       context.issues.push(
         context.createIssue({
-          code: context.ISSUE_CODES.XML_CHOICE_MULTIPLE_BRANCHES,
-          severity: "error",
-          message: "Multiple xs:choice branches appear to match at the same position.",
-          ...getLocationFields(context, context.currentXmlNode),
+          code: context.ISSUE_CODES.XML_CONTENT_MODEL_AMBIGUOUS,
+          severity: "warning",
+          message: "Multiple xs:choice branches could match the same child; validation will select the first branch deterministically.",
+          ...getLocationFields(context, childNode || context.currentXmlNode),
           path: buildXmlPath(pathParts),
           source: "xml",
           nodeKind: "choice",

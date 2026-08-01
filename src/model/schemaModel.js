@@ -67,14 +67,24 @@ export function normalizeUse(value) {
   return null;
 }
 
+export function normalizeDerivationControls(value) {
+  if (value == null || value === "") return [];
+  return String(value)
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export function createAnnotation({
   documentation = null,
   appinfo = null,
+  processingInstructions = [],
 } = {}) {
   return {
     kind: "annotation",
     documentation,
     appinfo,
+    processingInstructions,
   };
 }
 
@@ -90,6 +100,9 @@ export function createElementDecl({
   defaultValue = null,
   fixedValue = null,
   nillable = false,
+  abstract = false,
+  block = [],
+  substitutionGroup = null,
   identityConstraints = [],
   annotation = null,
   line = null,
@@ -109,6 +122,9 @@ export function createElementDecl({
     defaultValue,
     fixedValue,
     nillable,
+    abstract,
+    block,
+    substitutionGroup,
     identityConstraints,
     annotation,
     line,
@@ -160,6 +176,8 @@ export function createComplexTypeDecl({
   contentModel = "complex",
   mixed = false,
   abstract = false,
+  final = [],
+  block = [],
   identityConstraints = [],
   annotation = null,
   line = null,
@@ -177,6 +195,8 @@ export function createComplexTypeDecl({
     contentModel,
     mixed,
     abstract,
+    final,
+    block,
     identityConstraints,
     annotation,
     line,
@@ -192,6 +212,11 @@ export function createSimpleTypeDecl({
   baseTypeName = null,
   facets = {},
   enumerations = [],
+  contentKind = null,
+  itemType = null,
+  memberTypes = [],
+  final = [],
+  block = [],
   annotation = null,
   line = null,
   column = null,
@@ -205,6 +230,36 @@ export function createSimpleTypeDecl({
     baseTypeName,
     facets,
     enumerations,
+    contentKind,
+    itemType,
+    memberTypes,
+    final,
+    block,
+    annotation,
+    line,
+    column,
+    path
+  };
+}
+
+export function createNotationDecl({
+  name = null,
+  qName = null,
+  namespaceUri = null,
+  systemIdentifier = null,
+  publicIdentifier = null,
+  annotation = null,
+  line = null,
+  column = null,
+  path = null
+} = {}) {
+  return {
+    kind: "notation",
+    name,
+    qName,
+    namespaceUri,
+    systemIdentifier,
+    publicIdentifier,
     annotation,
     line,
     column,

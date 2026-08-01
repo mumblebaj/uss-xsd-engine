@@ -106,6 +106,7 @@ function buildAttributeNode(schema, attributeDecl, state) {
     line: attributeDecl.line,
     column: attributeDecl.column,
     path: attributeDecl.path,
+    annotation: attributeDecl.annotation || null,
     children: [],
   });
 
@@ -309,6 +310,7 @@ function buildComplexTypeNode(schema, complexTypeDecl, state) {
     line: complexTypeDecl.line,
     column: complexTypeDecl.column,
     path: complexTypeDecl.path,
+    annotation: complexTypeDecl.annotation || null,
     children,
   });
 }
@@ -322,6 +324,7 @@ function buildSimpleTypeNode(schema, simpleTypeDecl) {
     line: simpleTypeDecl.line,
     column: simpleTypeDecl.column,
     path: simpleTypeDecl.path,
+    annotation: simpleTypeDecl.annotation || null,
     children: buildSimpleTypeChildren(schema, simpleTypeDecl),
   });
 }
@@ -366,6 +369,7 @@ function buildElementNode(schema, elementDecl, state) {
     line: elementDecl.line,
     column: elementDecl.column,
     path: elementDecl.path,
+    annotation: elementDecl.annotation || null,
     children: [],
   });
 

@@ -13,8 +13,10 @@ import {
   createGroupDecl,
   createGroupRefNode,
   createIdentityConstraint,
+  createNotationDecl,
   createSequenceNode,
   createSimpleTypeDecl,
+  normalizeDerivationControls,
   normalizeOccurs,
   normalizeUse,
 } from "../model/schemaModel.js";
@@ -26,9 +28,7 @@ import {
   stripNamespacePrefix,
 } from "../resolver/schemaResolvers.js";
 
-const UNSUPPORTED_NODE_FEATURES = new Set([
-  "notation",
-]);
+const UNSUPPORTED_NODE_FEATURES = new Set([]);
 
 function elementChildren(node) {
   return Array.from(node?.children || []).filter(
@@ -224,6 +224,12 @@ function buildPath(parentPath, node) {
 }
 
 function registerGlobal(schema, issues, bucketName, duplicateCode, decl) {
+  if (!decl || !decl.name) return;
+
+  if (!schema.globals[bucketName]) {
+    schema.globals[bucketName] = Object.create(null);
+  }
+
   const localName = stripNamespacePrefix(decl.name);
   if (!localName) return;
 
@@ -455,19 +461,46 @@ function parseFacets(node, xsdText, lineStarts, parentPath) {
   return { facets, enumerations };
 }
 
-function parseAnnotation(node) {
-  if (!node || node.localName !== "annotation") {
+function collectProcessingInstructionsFromText(xsdText, node) {
+  if (!xsdText || !node) return [];
+
+  const source = String(xsdText);
+  const start = node?.nodeStartIndex ?? null;
+  const end = node?.nodeEndIndex ?? null;
+
+  const snippet =
+    typeof start === "number" && typeof end === "number"
+      ? source.slice(start, end)
+      : source;
+
+  const matches = [...snippet.matchAll(/<\?(.*?)\?>/gs)];
+  return matches.map((match) => {
+    const raw = match[1]?.trim() || "";
+    const whitespaceIndex = raw.search(/\s/);
+    const target = whitespaceIndex >= 0 ? raw.slice(0, whitespaceIndex) : raw;
+    const data = whitespaceIndex >= 0 ? raw.slice(whitespaceIndex).trim() : null;
+
+    return {
+      target: target || null,
+      data: data || null,
+    };
+  });
+}
+
+function parseAnnotation(node, parentNode = null, xsdText = "") {
+  if (!node && !parentNode) {
     return null;
   }
 
-  const children = Array.from(node.children || []).filter(
+  const annotationChildren = Array.from(node?.children || []).filter(
     (child) => child.nodeType === 1,
   );
 
   let documentation = null;
   let appinfo = null;
+  let processingInstructions = [];
 
-  for (const child of children) {
+  for (const child of annotationChildren) {
     if (child.localName === "documentation") {
       const lang = child.getAttribute("xml:lang") || null;
       const source = child.getAttribute("source") || null;
@@ -489,13 +522,52 @@ function parseAnnotation(node) {
     }
   }
 
-  if (!documentation && !appinfo) {
+  const sourceNode = node || parentNode;
+  processingInstructions = collectProcessingInstructionsFromText(xsdText, sourceNode);
+
+  if (!documentation && !appinfo && !processingInstructions.length) {
     return null;
   }
 
   return createAnnotation({
     documentation,
     appinfo,
+    processingInstructions,
+  });
+}
+
+function parseNotation(
+  node,
+  xsdText,
+  lineStarts,
+  parentPath,
+  schema,
+  issues,
+) {
+  const path = buildPath(parentPath, node);
+  const loc = locateNodeInSource(xsdText, lineStarts, node);
+
+  collectNodeDiagnostics(schema, issues, node, path, loc);
+
+  const children = elementChildren(node);
+  const annotationNode = children.find(
+    (child) => child.localName === "annotation",
+  );
+  const annotation = parseAnnotation(annotationNode, node, xsdText);
+
+  const qName = node.getAttribute("name");
+  const namespaceUri = schema.targetNamespace || null;
+
+  return createNotationDecl({
+    name: qName ? parseQName(qName).localName : null,
+    qName,
+    namespaceUri,
+    systemIdentifier: node.getAttribute("systemIdentifier") || node.getAttribute("system") || null,
+    publicIdentifier: node.getAttribute("public") || null,
+    annotation,
+    line: loc.line,
+    column: loc.column,
+    path,
   });
 }
 
@@ -515,6 +587,9 @@ function parseSimpleType(
   let baseTypeName = null;
   let facets = {};
   let enumerations = [];
+  let contentKind = null;
+  let itemType = null;
+  let memberTypes = [];
 
   const children = elementChildren(node);
 
@@ -522,7 +597,7 @@ function parseSimpleType(
   const annotationNode = children.find(
     (child) => child.localName === "annotation",
   );
-  const annotation = parseAnnotation(annotationNode);
+  const annotation = parseAnnotation(annotationNode, node, xsdText);
 
   const restriction = children.find(
     (child) => child.localName === "restriction",
@@ -549,6 +624,22 @@ function parseSimpleType(
     enumerations = parsed.enumerations;
   }
 
+  const listNode = children.find((child) => child.localName === "list");
+  if (listNode) {
+    contentKind = "list";
+    itemType = listNode.getAttribute("itemType") || null;
+  }
+
+  const unionNode = children.find((child) => child.localName === "union");
+  if (unionNode) {
+    contentKind = "union";
+    const memberTypesValue = unionNode.getAttribute("memberTypes") || "";
+    memberTypes = memberTypesValue
+      .split(/\s+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
   const qName = node.getAttribute("name");
   const namespaceUri = schema.targetNamespace || null;
 
@@ -559,6 +650,11 @@ function parseSimpleType(
     baseTypeName,
     facets,
     enumerations,
+    contentKind,
+    itemType,
+    memberTypes,
+    final: normalizeDerivationControls(node.getAttribute("final")),
+    block: normalizeDerivationControls(node.getAttribute("block")),
     annotation,
     line: loc.line,
     column: loc.column,
@@ -578,7 +674,7 @@ function parseAttribute(node, xsdText, lineStarts, parentPath, schema, issues) {
   const annotationNode = children.find(
     (child) => child.localName === "annotation",
   );
-  const annotation = parseAnnotation(annotationNode);
+  const annotation = parseAnnotation(annotationNode, node, xsdText);
 
   const inlineSimpleTypeNode = children.find(
     (child) => child.localName === "simpleType",
@@ -688,7 +784,7 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
   const annotationNode = children.find(
     (child) => child.localName === "annotation",
   );
-  const annotation = parseAnnotation(annotationNode);
+  const annotation = parseAnnotation(annotationNode, node, xsdText);
 
   const inlineComplexTypeNode = children.find(
     (child) => child.localName === "complexType",
@@ -750,6 +846,9 @@ function parseElement(node, xsdText, lineStarts, parentPath, schema, issues) {
     defaultValue: node.getAttribute("default"),
     fixedValue: node.getAttribute("fixed"),
     nillable: node.getAttribute("nillable") === "true",
+    abstract: node.getAttribute("abstract") === "true",
+    block: normalizeDerivationControls(node.getAttribute("block")),
+    substitutionGroup: node.getAttribute("substitutionGroup") || null,
     identityConstraints,
     annotation,
     line: loc.line,
@@ -1103,7 +1202,7 @@ function parseComplexType(
   const annotationNode = children.find(
     (child) => child.localName === "annotation",
   );
-  const annotation = parseAnnotation(annotationNode);
+  const annotation = parseAnnotation(annotationNode, node, xsdText);
 
   const identityConstraints = children
     .filter((child) =>
@@ -1204,6 +1303,8 @@ function parseComplexType(
     contentModel,
     mixed: node.getAttribute("mixed") === "true",
     abstract: node.getAttribute("abstract") === "true",
+    final: normalizeDerivationControls(node.getAttribute("final")),
+    block: normalizeDerivationControls(node.getAttribute("block")),
     identityConstraints,
     annotation,
     line: loc.line,
@@ -1610,6 +1711,25 @@ export function buildSchemaModel(doc, options = {}) {
           schema,
           issues,
           "simpleTypes",
+          ISSUE_CODES.DUPLICATE_GLOBAL_SIMPLE_TYPE,
+          decl,
+        );
+        break;
+      }
+
+      case "notation": {
+        const decl = parseNotation(
+          child,
+          xsdText,
+          lineStarts,
+          rootPath,
+          schema,
+          issues,
+        );
+        registerGlobal(
+          schema,
+          issues,
+          "notations",
           ISSUE_CODES.DUPLICATE_GLOBAL_SIMPLE_TYPE,
           decl,
         );

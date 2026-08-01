@@ -1,11 +1,162 @@
 # Changelog
 
+## [1.0.0] - 2026-08-01
+
+## Phase 5.1: Compound Simple Type Support ⭐
+
+### Summary
+Completed the first implementation milestone for Phase 5.1 by adding support for compound XSD simple types in the parser and runtime validator. This expands the engine’s coverage for `xs:list` and `xs:union` constructors and ensures streamed validation uses the same shared logic as non-streaming validation.
+
+### What Changed
+
+#### Compound Simple Type Support
+- Added parsing support for `xs:list` with `itemType` metadata in the schema model.
+- Added parsing support for `xs:union` with `memberTypes` metadata in the schema model.
+- Added runtime value validation for list item membership and union member compatibility.
+- Ensured compound simple-type validation is exercised in the shared value validator used by streaming and non-streaming validation paths.
+
+#### Regression Coverage
+- Added smoke tests for parsing and validating compound simple types.
+- Added streaming regression coverage to confirm invalid list/union values are surfaced during incremental validation.
+
+### Files Modified
+- `src/model/schemaModel.js`
+- `src/parser/buildSchemaModel.js`
+- `src/validation/valueValidator.js`
+- `tests/smoke/parseSchema.test.js`
+- `tests/streaming/streamValidator.test.js`
+- `docs/specs/simple-type-compound-support.md`
+- `CHANGELOG.md`
+
+## Phase 5.2: Notation & Processing Instructions ⭐
+
+### Summary
+Completed the next implementation milestone for Phase 5.2 by adding support for XSD notation declarations and processing-instruction-based annotation metadata. The engine now preserves notation constraints and surfaces them during regular XML validation, while schema declarations can retain PI-style annotation payloads that were previously ignored.
+
+### What Changed
+
+#### Notation Support
+- Added parsing support for `xs:notation` declarations in the schema model.
+- Added notation validation logic for runtime value checks against declared notation constraints.
+- Integrated notation validation into the shared value-validation path so element and attribute validation now report notation mismatches during normal XML validation.
+
+#### Processing Instruction Annotations
+- Added support for capturing processing-instruction metadata alongside schema annotations.
+- Preserved PI payloads on declarations so they remain available in the parsed schema model for downstream consumers.
+
+#### Regression Coverage
+- Added smoke tests for notation declaration parsing and notation validation behavior.
+- Added regression coverage for processing-instruction annotation preservation.
+
+### Files Modified
+- `src/model/schemaModel.js`
+- `src/parser/buildSchemaModel.js`
+- `src/validation/notationValidator.js`
+- `src/validation/valueValidator.js`
+- `tests/smoke/notationValidation.test.js`
+- `CHANGELOG.md`
+
+## Phase 5.3: Ambiguous Choice Diagnostics ⭐
+
+### Summary
+Completed the Phase 5.3 implementation milestone by making ambiguous `xs:choice` branches emit a dedicated warning during XML validation. The validator now detects competing branches for the same child element and preserves deterministic selection behavior without falling back to the generic unsatisfied-choice error.
+
+### What Changed
+
+#### Ambiguity Detection
+- Added ambiguity detection for `xs:choice` content models when more than one branch can match the same child element.
+- Emitted `XML_CONTENT_MODEL_AMBIGUOUS` warnings while still selecting the first matching branch deterministically.
+- Ensured the warning is produced for the ambiguous case rather than the generic `XML_CHOICE_NOT_SATISFIED` error.
+
+#### Validation Robustness
+- Normalized XML DOM child traversal during parsing so the validator sees child elements consistently across runtime environments.
+- Kept the validation path deterministic for choice resolution in both non-streaming and streaming-compatible code paths.
+
+#### Regression Coverage
+- Added a smoke regression to cover ambiguous `xs:choice` behavior.
+
+### Files Modified
+- `src/validation/structureValidator.js`
+- `src/validation/xmlDiagnostics.js`
+- `tests/smoke/phase3_2_advancedFeatures.test.js`
+- `docs/specs/choice-ambiguity-diagnostics.md`
+- `CHANGELOG.md`
+
+## Phase 5.4: Derivation Control Support ⭐
+
+### Summary
+Completed the full Phase 5.4 implementation by enforcing XSD derivation-control semantics during runtime XML validation. The engine now rejects abstract elements in concrete instance content, accepts substitution-group members where the head element is expected, and blocks invalid extension or restriction derivations when the base type is marked final for that derivation.
+
+### What Changed
+
+#### Derivation-Control Enforcement
+- Added runtime validation for abstract element declarations so they cannot appear as concrete instance content.
+- Added substitution-group compatibility checks so members validate where the head element is expected.
+- Added final-type enforcement to reject blocked extension or restriction derivations during XML validation.
+- Introduced dedicated issue codes for abstract-element, substitution-group, and final-derivation violations.
+
+#### Regression Coverage
+- Added smoke tests covering abstract element rejection, substitution-group validation, and final-type enforcement.
+
+### Files Modified
+- `src/model/schemaModel.js`
+- `src/parser/buildSchemaModel.js`
+- `src/validation/structureValidator.js`
+- `src/validation/validateXmlAgainstSchema.js`
+- `src/diagnostics/issueCodes.js`
+- `tests/smoke/phase5_4_derivationControl.test.js`
+- `docs/specs/type-derivation-control.md`
+- `CHANGELOG.md`
+
+## Phase 5.5: Schema-Tree Annotation Exposure ⭐
+
+### Summary
+Completed the Phase 5.5 milestone by surfacing XSD annotation payloads through the schema-tree extraction API. Documentation, appinfo, and processing-instruction annotations are now preserved on relevant tree nodes so downstream tooling can inspect the embedded schema documentation without re-parsing the original XSD text.
+
+### What Changed
+
+#### Tree Annotation Exposure
+- Propagated parsed annotation metadata from the schema model into the extracted schema tree.
+- Exposed annotation payloads on element, complex-type, simple-type, and attribute nodes in the tree output.
+- Added regression coverage to ensure documentation and appinfo content appear in extracted trees.
+
+### Files Modified
+- `src/tree/extractTree.js`
+- `src/tree/treeNodeBuilders.js`
+- `tests/smoke/phase5_4_derivationControl.test.js`
+- `docs/specs/annotations-tree-extraction.md`
+- `CHANGELOG.md`
+
+## Phase 5.6: Comprehensive Spec Compliance ⭐
+
+### Summary
+Completed the Phase 5.6 compliance hardening pass by strengthening the engine around the remaining XSD edge cases in namespace handling, QName resolution, schema composition, substitution-group chains, and attribute wildcard interactions. The validator now behaves more consistently in these advanced scenarios while preserving expected diagnostics for unsupported content.
+
+### What Changed
+
+#### Compliance Hardening
+- Added recursive substitution-group matching so members of a substitution-group chain validate where the head element is expected.
+- Preserved namespace-safe QName resolution for prefixed, default-namespace, and no-namespace declarations across schema resolution paths.
+- Kept include/import/redefine composition handling aligned with the schema model and external-reference bookkeeping.
+- Strengthened attribute wildcard handling so matching attributes pass while unexpected ones still emit the correct diagnostics.
+
+#### Regression Coverage
+- Added targeted smoke coverage for substitution-group chain validation and attribute wildcard behavior.
+- Reused existing redefinition and namespace-aware validation tests to keep the broader compliance matrix covered.
+
+### Files Modified
+- `src/validation/structureValidator.js`
+- `src/resolver/schemaResolvers.js`
+- `src/parser/buildSchemaModel.js`
+- `tests/smoke/phase5_6_specCompliance.test.js`
+- `CHANGELOG.md`
+
 ## [0.3.1] - 2026-07-21
 
 ## Patch: Wildcard Sequence Consumption and Choice-Branch Validation Fixes ⭐
 
 ### Summary
-Patch release focused on XML validation correctness in non-streaming mode. This release fixes two behavior gaps discovered during SAA schema validation: repeated `xs:any` wildcard handling in `SwAny`-style bodies, and loss of nested validation issues inside selected `xs:choice` branches.
+Patch release focused on XML validation correctness in non-streaming mode. This release fixes two behavior gaps discovered during specialized schema validation: repeated `xs:any` wildcard handling in `##any`-style bodies, and loss of nested validation issues inside selected `xs:choice` branches.
 
 ### What Changed
 

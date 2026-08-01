@@ -3,10 +3,12 @@ import {
   isBuiltinType,
   resolveAttributeType,
   resolveElementType,
+  resolveType,
   stripNamespacePrefix
 } from "../resolver/schemaResolvers.js";
 import { validateBuiltinType } from "./builtinTypeValidators.js";
 import { validateFacets } from "./facetUtils.js";
+import { validateNotationUsage } from "./notationValidator.js";
 
 function enumerationValue(enumeration) {
   if (enumeration && typeof enumeration === "object") {
@@ -58,6 +60,56 @@ export function validateAttributeValue(schema, attrDecl, value) {
   return validateByDeclType(schema, attrDecl, value, "attribute");
 }
 
+function validateListValue(schema, simpleType, value) {
+  const values = Array.isArray(value) ? value : String(value ?? "").split(/\s+/).filter(Boolean);
+
+  for (const item of values) {
+    const itemType = simpleType.itemType ? resolveType(schema, simpleType.itemType) : null;
+    if (!itemType) {
+      return { ok: true, code: null, message: null };
+    }
+
+    const itemResult = validateResolvedValue(schema, itemType, item);
+    if (!itemResult.ok) {
+      return {
+        ok: false,
+        code: "XML_VALUE_INVALID",
+        message: `List item '${item}' is not valid for type '${simpleType.itemType}'.`
+      };
+    }
+  }
+
+  return { ok: true, code: null, message: null };
+}
+
+function validateUnionValue(schema, simpleType, value) {
+  const memberTypes = Array.isArray(simpleType.memberTypes) && simpleType.memberTypes.length
+    ? simpleType.memberTypes
+    : [];
+
+  if (!memberTypes.length) {
+    return { ok: true, code: null, message: null };
+  }
+
+  for (const memberTypeName of memberTypes) {
+    const memberType = resolveType(schema, memberTypeName);
+    if (!memberType) {
+      continue;
+    }
+
+    const memberResult = validateResolvedValue(schema, memberType, value);
+    if (memberResult.ok) {
+      return { ok: true, code: null, message: null };
+    }
+  }
+
+  return {
+    ok: false,
+    code: "XML_VALUE_INVALID",
+    message: `Value '${value}' is not valid for any union member type.`
+  };
+}
+
 export function validateResolvedValue(schema, resolvedType, value) {
   if (!resolvedType) {
     return { ok: true, code: null, message: null };
@@ -76,6 +128,24 @@ export function validateResolvedValue(schema, resolvedType, value) {
   }
 
   if (resolvedType.kind === "simpleType") {
+    if (resolvedType.contentKind === "list") {
+      return validateListValue(schema, resolvedType, value);
+    }
+
+    if (resolvedType.name) {
+      const notationDecl = schema?.globals?.notations?.[`${resolvedType.namespaceUri || ""}::${resolvedType.name}`];
+      if (notationDecl) {
+        const notationResult = validateNotationUsage(schema, value, notationDecl);
+        if (!notationResult.ok) {
+          return notationResult;
+        }
+      }
+    }
+
+    if (resolvedType.contentKind === "union") {
+      return validateUnionValue(schema, resolvedType, value);
+    }
+
     const effective = getEffectiveSimpleType(schema, resolvedType);
 
     if (effective.enumerations?.length) {

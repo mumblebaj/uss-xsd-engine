@@ -12,6 +12,30 @@ function getDomParser(parserOverride = null) {
   );
 }
 
+function normalizeChildrenTree(node) {
+  if (!node || typeof node !== "object") return;
+
+  if (!Object.prototype.hasOwnProperty.call(node, "children")) {
+    try {
+      Object.defineProperty(node, "children", {
+        configurable: true,
+        enumerable: false,
+        get() {
+          return Array.from(this.childNodes || []).filter(
+            (child) => child.nodeType === 1,
+          );
+        },
+      });
+    } catch {
+      // Ignore non-extensible nodes in test environments.
+    }
+  }
+
+  for (const child of Array.from(node.childNodes || [])) {
+    normalizeChildrenTree(child);
+  }
+}
+
 export function makeDiagnostic(source, severity, message, line = 1, column = 1) {
   return {
     source,
@@ -42,6 +66,9 @@ export function parseXmlWithDiagnostics(text, source = "xml", options = {}) {
     const DOMParserImpl = getDomParser(options.DOMParser);
     const parser = new DOMParserImpl();
     document = parser.parseFromString(text, "application/xml");
+    if (document?.documentElement) {
+      normalizeChildrenTree(document.documentElement);
+    }
   } catch (error) {
     diagnostics.push(
       makeDiagnostic(

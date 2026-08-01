@@ -16,6 +16,8 @@ If you appreciate this library and you want to support my work:
 
 <a href="https://www.buymeacoffee.com/mumblebaj" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Beer" style="height: 45px !important;width: 180px !important;" ></a>
 
+> ⭐ Please don't forget to star my GitHub repository if you like this project: [uss-xsd-engine](https://github.com/mumblebaj/uss-xsd-engine)
+
 ---
 
 > 📦 Latest release: See full details in [GitHub Releases](https://github.com/mumblebaj/uss-xsd-engine/releases)
